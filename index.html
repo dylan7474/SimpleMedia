@@ -91,63 +91,19 @@
             
             <!-- PAGE 1: Internet Radio -->
             <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
-                <div class="grid grid-cols-2 gap-6">
-                    <button onclick="playMedia('BBC Radio 4', 'Radio')" class="tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400">
-                        <div class="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-4xl font-bold">R4</div>
-                        <span class="text-3xl font-semibold text-center mt-2">BBC Radio 4</span>
-                    </button>
-                    <button onclick="playMedia('Classic FM', 'Radio')" class="tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400">
-                        <div class="w-24 h-24 rounded-full bg-emerald-600 flex items-center justify-center text-4xl font-bold">CFM</div>
-                        <span class="text-3xl font-semibold text-center mt-2">Classic FM</span>
-                    </button>
-                    <button onclick="playMedia('Jazz 24', 'Radio')" class="tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400">
-                        <div class="w-24 h-24 rounded-full bg-purple-600 flex items-center justify-center"><i data-lucide="music" class="w-12 h-12"></i></div>
-                        <span class="text-3xl font-semibold text-center mt-2">Jazz 24</span>
-                    </button>
-                    <button onclick="playMedia('Local News', 'Radio')" class="tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400">
-                        <div class="w-24 h-24 rounded-full bg-red-600 flex items-center justify-center"><i data-lucide="mic" class="w-12 h-12"></i></div>
-                        <span class="text-3xl font-semibold text-center mt-2">Local News</span>
-                    </button>
+                <div class="grid grid-cols-2 gap-6" id="radioGrid">
                 </div>
             </div>
 
             <!-- PAGE 2: Audio Books -->
             <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
-                <div class="flex flex-col gap-6">
-                    <button onclick="playMedia('The Hobbit - Ch. 4', 'Audiobook')" class="tap-target bg-slate-800 rounded-3xl p-6 flex items-center gap-6 text-left w-full">
-                        <div class="w-28 h-36 bg-amber-700 rounded-xl flex-shrink-0 shadow-lg"></div>
-                        <div class="flex flex-col justify-center">
-                            <span class="text-xl text-amber-400 font-medium uppercase tracking-wider mb-1">Resume Playing</span>
-                            <span class="text-4xl font-bold mb-2">The Hobbit</span>
-                            <span class="text-2xl text-slate-400">Chapter 4 • J.R.R. Tolkien</span>
-                        </div>
-                    </button>
-                    
-                    <button onclick="playMedia('Agatha Christie - M.O.T.O.E', 'Audiobook')" class="tap-target bg-slate-800 rounded-3xl p-6 flex items-center gap-6 text-left w-full">
-                        <div class="w-28 h-36 bg-blue-900 rounded-xl flex-shrink-0 shadow-lg"></div>
-                        <div class="flex flex-col justify-center">
-                            <span class="text-4xl font-bold mb-2 leading-tight">Murder on the Orient Express</span>
-                            <span class="text-2xl text-slate-400">Agatha Christie</span>
-                        </div>
-                    </button>
+                <div class="flex flex-col gap-6" id="booksList">
                 </div>
             </div>
 
             <!-- PAGE 3: Music Albums -->
             <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
-                <div class="grid grid-cols-2 gap-6">
-                    <button onclick="playMedia('The Beatles 1', 'Album')" class="tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
-                        <div class="w-40 h-40 bg-red-600 rounded-xl shadow-lg flex items-center justify-center text-6xl font-black text-yellow-400">1</div>
-                        <span class="text-3xl font-bold mt-2">The Beatles</span>
-                    </button>
-                    <button onclick="playMedia('Frank Sinatra Collection', 'Album')" class="tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
-                        <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center"><i data-lucide="disc-3" class="w-20 h-20 text-slate-400"></i></div>
-                        <span class="text-3xl font-bold mt-2">Frank Sinatra</span>
-                    </button>
-                     <button onclick="playMedia('Beethoven Symphonies', 'Album')" class="tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
-                        <div class="w-40 h-40 bg-stone-700 rounded-xl shadow-lg flex items-center justify-center"><i data-lucide="library" class="w-20 h-20 text-stone-400"></i></div>
-                        <span class="text-3xl font-bold mt-2">Beethoven</span>
-                    </button>
+                <div class="grid grid-cols-2 gap-6" id="musicGrid">
                 </div>
             </div>
 
@@ -171,7 +127,7 @@
                         <span class="text-lg text-slate-400 mb-1">(Double tap anywhere to turn on/off)</span>
                     </div>
                     
-                    <button onclick="toggleNoise()" id="mainNoiseToggle" class="tap-target w-full bg-slate-800 text-3xl font-bold py-8 rounded-3xl mb-6 flex justify-center items-center gap-4">
+                    <button onclick="toggleNoise()" id="mainNoiseToggle" class="tap-target w-full bg-slate-800 text-white text-3xl font-bold py-8 rounded-3xl mb-6 flex justify-center items-center gap-4">
                         <i data-lucide="waves" class="w-10 h-10"></i> 
                         <span id="noiseToggleText">Turn Noise ON</span>
                     </button>
@@ -278,7 +234,35 @@
         let isNoiseOn = false;
         let noiseType = 'White';
         let sleepTimer = 0; // minutes
+        let sleepTimeoutId = null;
+        let currentMedia = null;
         const titles = ["Internet Radio", "Audio Books", "Music Albums", "Rest & Settings"];
+        const appAudio = new Audio();
+        appAudio.preload = 'none';
+
+        const defaultLibrary = {
+            radio: [
+                { title: 'BBC Radio 4', url: 'https://stream.live.vc.bbcmedia.co.uk/bbc_radio_fourfm', subtitle: 'Speech & News' },
+                { title: 'Classic FM', url: 'https://media-ice.musicradio.com/ClassicFMMP3', subtitle: 'Classical Favorites' },
+                { title: 'Jazz24', url: 'https://live.wostreaming.net/direct/ppm-jazz24mp3-ibc1', subtitle: 'Jazz Radio' },
+                { title: 'KEXP', url: 'https://kexp-mp3-128.streamguys1.com/kexp128.mp3', subtitle: 'Independent Music' }
+            ],
+            books: [
+                { title: 'The Hobbit - Chapter 1', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', subtitle: 'Sample audiobook stream' },
+                { title: 'Murder on the Orient Express', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', subtitle: 'Sample audiobook stream' }
+            ],
+            music: [
+                { title: 'The Beatles Collection', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', subtitle: 'Sample album stream' },
+                { title: 'Frank Sinatra Collection', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', subtitle: 'Sample album stream' },
+                { title: 'Beethoven Essentials', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3', subtitle: 'Sample album stream' }
+            ]
+        };
+        const configDefaults = {
+            radioPath: '/api/radio-stations',
+            booksPath: '/media/audiobooks/',
+            musicPath: '/media/music/'
+        };
+        let appConfig = { ...configDefaults };
         
         let restTapCount = 0;
         let restTapTimer;
@@ -377,23 +361,55 @@
         const npTitle = document.getElementById('npTitle');
         const npType = document.getElementById('npType');
 
-        function playMedia(title, type) {
-            npTitle.innerText = title;
-            npType.innerText = "Playing " + type;
+        appAudio.addEventListener('play', () => {
             isPlaying = true;
             updatePlayIcon();
-            
-            // Show bar
+        });
+
+        appAudio.addEventListener('pause', () => {
+            isPlaying = false;
+            updatePlayIcon();
+        });
+
+        appAudio.addEventListener('ended', () => {
+            isPlaying = false;
+            updatePlayIcon();
+            showToast('Playback ended', 'music');
+        });
+
+        appAudio.addEventListener('error', () => {
+            isPlaying = false;
+            updatePlayIcon();
+            showToast('Could not play this source', 'alert-triangle');
+        });
+
+        async function playMedia(item, type) {
+            currentMedia = item;
+            npTitle.innerText = item.title;
+            npType.innerText = "Playing " + type;
+            appAudio.src = item.url;
+            appAudio.load();
+            try {
+                await appAudio.play();
+            } catch (error) {
+                showToast('Tap again to allow audio playback', 'volume-x');
+                console.error('Playback failed:', error);
+            }
+
             nowPlayingBar.classList.remove('hidden');
-            // Small timeout to allow display:block to apply before animating transform
-            setTimeout(() => {
-                nowPlayingBar.classList.remove('translate-y-full');
-            }, 10);
+            setTimeout(() => nowPlayingBar.classList.remove('translate-y-full'), 10);
         }
 
         function togglePlay() {
-            isPlaying = !isPlaying;
-            updatePlayIcon();
+            if (!currentMedia) {
+                showToast('Select media first', 'info');
+                return;
+            }
+            if (appAudio.paused) {
+                appAudio.play().catch(() => showToast('Unable to resume playback', 'alert-triangle'));
+            } else {
+                appAudio.pause();
+            }
         }
 
         function updatePlayIcon() {
@@ -409,6 +425,10 @@
 
         function closeNowPlaying() {
             isPlaying = false;
+            appAudio.pause();
+            appAudio.removeAttribute('src');
+            appAudio.load();
+            currentMedia = null;
             nowPlayingBar.classList.add('translate-y-full');
             setTimeout(() => {
                 nowPlayingBar.classList.add('hidden');
@@ -555,6 +575,10 @@
         // --- Sleep Timer Logic ---
         function setSleep(mins) {
             sleepTimer = mins;
+            if (sleepTimeoutId) {
+                clearTimeout(sleepTimeoutId);
+                sleepTimeoutId = null;
+            }
             const btns = document.querySelectorAll('.sleep-btn');
             
             btns.forEach(btn => {
@@ -572,6 +596,15 @@
             if (mins > 0) {
                 indicator.classList.remove('hidden');
                 sleepTimeTxt.innerText = mins + 'm';
+                sleepTimeoutId = setTimeout(() => {
+                    if (!appAudio.paused || isNoiseOn) {
+                        appAudio.pause();
+                        if (isNoiseOn) toggleNoise();
+                        showToast('Sleep timer stopped playback', 'moon');
+                    }
+                    indicator.classList.add('hidden');
+                    sleepTimer = 0;
+                }, mins * 60 * 1000);
                 showToast(`Sleep set for ${mins} mins`, 'moon');
             } else {
                 indicator.classList.add('hidden');
@@ -581,6 +614,130 @@
 
         // --- Hidden Config Screen Logic ---
         const configScreen = document.getElementById('configScreen');
+
+        function loadConfig() {
+            try {
+                const saved = localStorage.getItem('simpleMediaConfig');
+                if (saved) {
+                    appConfig = { ...configDefaults, ...JSON.parse(saved) };
+                }
+            } catch (error) {
+                console.error('Could not parse saved config', error);
+            }
+            document.getElementById('radioPath').value = appConfig.radioPath;
+            document.getElementById('booksPath').value = appConfig.booksPath;
+            document.getElementById('musicPath').value = appConfig.musicPath;
+        }
+
+        function normalizeLibraryData(raw) {
+            if (Array.isArray(raw)) return raw;
+            if (raw && Array.isArray(raw.items)) return raw.items;
+            if (raw && Array.isArray(raw.stations)) return raw.stations;
+            if (raw && Array.isArray(raw.tracks)) return raw.tracks;
+            return [];
+        }
+
+        function parseM3U(text) {
+            const lines = text.split(/\r?\n/);
+            const entries = [];
+            let pendingTitle = '';
+            for (const line of lines) {
+                if (line.startsWith('#EXTINF')) {
+                    pendingTitle = line.split(',')[1] || 'Radio stream';
+                    continue;
+                }
+                if (line && !line.startsWith('#')) {
+                    entries.push({ title: pendingTitle || 'Radio stream', url: line.trim() });
+                    pendingTitle = '';
+                }
+            }
+            return entries;
+        }
+
+        async function fetchLibrary(path, fallbackData, allowM3U = false) {
+            try {
+                const response = await fetch(path);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const contentType = response.headers.get('content-type') || '';
+                const body = await response.text();
+                const looksLikeM3U = contentType.includes('mpegurl')
+                    || contentType.includes('m3u')
+                    || body.trim().startsWith('#EXTM3U')
+                    || path.toLowerCase().endsWith('.m3u');
+                if (allowM3U && looksLikeM3U) {
+                    const parsed = parseM3U(body);
+                    if (parsed.length > 0) return parsed;
+                }
+                const data = JSON.parse(body);
+                const normalized = normalizeLibraryData(data);
+                return normalized.length ? normalized : fallbackData;
+            } catch (error) {
+                console.warn(`Using fallback media for "${path}"`, error);
+                return fallbackData;
+            }
+        }
+
+        function renderRadio(stations) {
+            const radioGrid = document.getElementById('radioGrid');
+            radioGrid.innerHTML = '';
+            stations.forEach((station, index) => {
+                const initials = station.title.split(' ').map(word => word[0]).join('').slice(0, 3);
+                const colorClasses = ['bg-blue-600', 'bg-emerald-600', 'bg-purple-600', 'bg-red-600'];
+                const card = document.createElement('button');
+                card.className = 'tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400';
+                card.innerHTML = `
+                    <div class="w-24 h-24 rounded-full ${colorClasses[index % colorClasses.length]} flex items-center justify-center text-3xl font-bold">${initials}</div>
+                    <span class="text-3xl font-semibold text-center mt-2">${station.title}</span>
+                `;
+                card.addEventListener('click', () => playMedia(station, 'Radio'));
+                radioGrid.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function renderBookList(books) {
+            const booksList = document.getElementById('booksList');
+            booksList.innerHTML = '';
+            books.forEach((book, index) => {
+                const colors = ['bg-amber-700', 'bg-blue-900', 'bg-violet-800', 'bg-teal-800'];
+                const card = document.createElement('button');
+                card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex items-center gap-6 text-left w-full';
+                card.innerHTML = `
+                    <div class="w-28 h-36 ${colors[index % colors.length]} rounded-xl flex-shrink-0 shadow-lg"></div>
+                    <div class="flex flex-col justify-center">
+                        <span class="text-4xl font-bold mb-2 leading-tight">${book.title}</span>
+                        <span class="text-2xl text-slate-400">${book.subtitle || 'Audiobook'}</span>
+                    </div>
+                `;
+                card.addEventListener('click', () => playMedia(book, 'Audiobook'));
+                booksList.appendChild(card);
+            });
+        }
+
+        function renderMusicGrid(albums) {
+            const musicGrid = document.getElementById('musicGrid');
+            musicGrid.innerHTML = '';
+            albums.forEach((album, index) => {
+                const card = document.createElement('button');
+                card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center';
+                card.innerHTML = `
+                    <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center text-5xl font-black text-amber-300">${index + 1}</div>
+                    <span class="text-3xl font-bold mt-2">${album.title}</span>
+                    <span class="text-xl text-slate-400">${album.subtitle || 'Album'}</span>
+                `;
+                card.addEventListener('click', () => playMedia(album, 'Album'));
+                musicGrid.appendChild(card);
+            });
+        }
+
+        async function loadLibraries() {
+            const radio = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, true);
+            const books = await fetchLibrary(appConfig.booksPath, defaultLibrary.books);
+            const music = await fetchLibrary(appConfig.musicPath, defaultLibrary.music);
+            renderRadio(radio);
+            renderBookList(books);
+            renderMusicGrid(music);
+        }
 
         function openConfig() {
             configScreen.classList.remove('hidden');
@@ -597,13 +754,15 @@
             const rPath = document.getElementById('radioPath').value;
             const bPath = document.getElementById('booksPath').value;
             const mPath = document.getElementById('musicPath').value;
-            
-            // Log paths out to be picked up by future backend integration
-            console.log("Configuration Saved:", { radioSource: rPath, booksFolder: bPath, musicFolder: mPath });
-            
+            appConfig = { radioPath: rPath, booksPath: bPath, musicPath: mPath };
+            localStorage.setItem('simpleMediaConfig', JSON.stringify(appConfig));
+            loadLibraries();
             showToast("Configuration Saved", 'check-circle');
             closeConfig();
         }
+
+        loadConfig();
+        loadLibraries();
 
     </script>
 </body>

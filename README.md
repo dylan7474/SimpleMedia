@@ -43,6 +43,7 @@ Or provide custom port and hostname:
 - **Bottom tabs**: switch between **Radio**, **Books**, **Music**, and **Rest**.
 - **Tap media cards**: start playback for a station/book/album.
 - **Now Playing bar**: pause/resume, view current title, and close the player strip.
+- **Hidden config screen**: tap the **Rest** tab 3 times quickly, then set Radio/Books/Music source paths. Saved values are persisted in browser storage and immediately used to load media libraries.
 - **Rest tab**:
   - Set **Sleep Timer** (15/30/60 minutes or Off).
   - Toggle **Background Noise** and choose White/Pink/Blue noise.
@@ -51,8 +52,7 @@ Or provide custom port and hostname:
 
 ## Roadmap
 
-- Connect UI controls to real streaming/audio playback sources.
-- Add persistent storage for settings (sleep timer, noise profile, volume).
+- Persist additional runtime settings (sleep timer, noise profile, volume).
 - Add keyboard and screen-reader accessibility improvements.
 - Add automated tests for interaction flows.
 - Add CI workflow for lint/check/deploy validation.
