@@ -3,10 +3,10 @@
 set -euo pipefail
 
 PORT_ARG=${1:-3014}
-PROJECT_NAME="chatter"
-IMAGE_NAME="chatter"
-CONTAINER_NAME="chatter"
 HOST_ARG=${2:-localhost}
+PROJECT_NAME="simplemedia"
+IMAGE_NAME="simplemedia"
+CONTAINER_NAME="simplemedia"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 TMP_DOCKERFILE="${SCRIPT_DIR}/.Dockerfile.deploy"
@@ -81,11 +81,11 @@ if (ENABLE_HTTPS) {
     key: fs.readFileSync(TLS_KEY_PATH),
   };
   https.createServer(tlsOptions, requestHandler).listen(PORT, () => {
-    console.log(`chatter static server listening with HTTPS on ${PORT}`);
+    console.log(`simplemedia static server listening with HTTPS on ${PORT}`);
   });
 } else {
   http.createServer(requestHandler).listen(PORT, () => {
-    console.log(`chatter static server listening with HTTP on ${PORT}`);
+    console.log(`simplemedia static server listening with HTTP on ${PORT}`);
   });
 }
 SERVER_EOF
@@ -147,6 +147,6 @@ docker run -d \
 IP_ADDR=$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2>/dev/null || echo "localhost")
 
 echo "========================================="
-echo "Deployed at https://${IP_ADDR}:${PORT_ARG}"
+echo "Deployed ${PROJECT_NAME} at https://${IP_ADDR}:${PORT_ARG}"
 echo "Note: first load uses a self-signed certificate; trust/accept it in your browser."
 echo "========================================="
