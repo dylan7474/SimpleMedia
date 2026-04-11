@@ -81,8 +81,7 @@
             <span id="sleepIndicator" class="hidden text-blue-400 flex items-center gap-2">
                 <i data-lucide="moon" class="w-6 h-6"></i> <span id="sleepTime">30m</span>
             </span>
-            <!-- The clock now acts as a secret long-press button for config -->
-            <span id="clock" class="cursor-pointer">12:00 PM</span>
+            <span id="clock">12:00 PM</span>
         </div>
     </header>
 
@@ -280,6 +279,9 @@
         let noiseType = 'White';
         let sleepTimer = 0; // minutes
         const titles = ["Internet Radio", "Audio Books", "Music Albums", "Rest & Settings"];
+        
+        let restTapCount = 0;
+        let restTapTimer;
 
         // --- Clock Update ---
         function updateClock() {
@@ -315,6 +317,22 @@
                     btn.classList.add('text-slate-500');
                 }
             });
+
+            // Hidden Config Trigger: 3 taps on the "Rest" tab
+            if (index === 3) {
+                restTapCount++;
+                clearTimeout(restTapTimer);
+                if (restTapCount >= 3) {
+                    openConfig();
+                    restTapCount = 0;
+                } else {
+                    restTapTimer = setTimeout(() => {
+                        restTapCount = 0;
+                    }, 1000); // 1 second window to tap 3 times
+                }
+            } else {
+                restTapCount = 0; // Reset if they tap another tab
+            }
         }
 
         // Swipe Detection Logic
@@ -563,26 +581,6 @@
 
         // --- Hidden Config Screen Logic ---
         const configScreen = document.getElementById('configScreen');
-        const clockEl = document.getElementById('clock');
-        let configTimer;
-
-        // Start 3 second timer for long press
-        function startConfigTimer(e) {
-            configTimer = setTimeout(() => {
-                openConfig();
-            }, 3000); 
-        }
-
-        function clearConfigTimer() {
-            clearTimeout(configTimer);
-        }
-
-        // Attach to the clock element
-        clockEl.addEventListener('touchstart', startConfigTimer, {passive: true});
-        clockEl.addEventListener('touchend', clearConfigTimer);
-        clockEl.addEventListener('mousedown', startConfigTimer);
-        clockEl.addEventListener('mouseup', clearConfigTimer);
-        clockEl.addEventListener('mouseleave', clearConfigTimer);
 
         function openConfig() {
             configScreen.classList.remove('hidden');
