@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Elder Media Player Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Prevent text selection and default touch actions for a native app feel */
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: pan-y; /* Allow vertical scrolling inside containers, handle horizontal in JS */
+            overflow: hidden;
+            background-color: #0f172a; /* Dark slate for high contrast and low glare */
+            color: #f8fafc;
+        }
+
+        /* Smooth page transitions */
+        #carousel {
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* Active touch state for visual feedback */
+        .tap-target:active {
+            transform: scale(0.96);
+            transition: transform 0.1s;
+        }
+        .tap-target {
+            transition: transform 0.2s;
+        }
+
+        /* Hide scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+
+        /* Custom range slider for elderly */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 48px;
+            width: 48px;
+            border-radius: 50%;
+            background: #fbbf24; /* Amber-400 */
+            cursor: pointer;
+            margin-top: -16px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 16px;
+            cursor: pointer;
+            background: #334155; /* Slate-700 */
+            border-radius: 8px;
+        }
+        
+        /* Toast animation */
+        @keyframes fadeOut {
+            0% { opacity: 1; transform: translate(-50%, 0); }
+            80% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -20px); }
+        }
+        .toast-anim {
+            animation: fadeOut 2.5s forwards;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col font-sans relative">
+
+    <!-- Top Header -->
+    <header class="pt-8 pb-4 px-6 flex justify-between items-center bg-slate-900 z-10 shrink-0 border-b border-slate-800">
+        <h1 class="text-4xl font-bold text-amber-400" id="pageTitle">Radio</h1>
+        <div class="text-2xl font-medium text-slate-300 flex items-center gap-4">
+            <span id="sleepIndicator" class="hidden text-blue-400 flex items-center gap-2">
+                <i data-lucide="moon" class="w-6 h-6"></i> <span id="sleepTime">30m</span>
+            </span>
+            <span id="clock">12:00 PM</span>
+        </div>
+    </header>
+
+    <!-- Main Swipeable Area -->
+    <main class="flex-1 overflow-hidden relative" id="touchArea">
+        <div id="carousel" class="flex h-full w-[400%]">
+            
+            <!-- PAGE 1: Internet Radio -->
+            <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
+                <div class="grid grid-cols-2 gap-6">
+                    <button onclick="playMedia('BBC Radio 4', 'Radio')" class="tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400">
+                        <div class="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-4xl font-bold">R4</div>
+                        <span class="text-3xl font-semibold text-center mt-2">BBC Radio 4</span>
+                    </button>
+                    <button onclick="playMedia('Classic FM', 'Radio')" class="tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400">
+                        <div class="w-24 h-24 rounded-full bg-emerald-600 flex items-center justify-center text-4xl font-bold">CFM</div>
+                        <span class="text-3xl font-semibold text-center mt-2">Classic FM</span>
+                    </button>
+                    <button onclick="playMedia('Jazz 24', 'Radio')" class="tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400">
+                        <div class="w-24 h-24 rounded-full bg-purple-600 flex items-center justify-center"><i data-lucide="music" class="w-12 h-12"></i></div>
+                        <span class="text-3xl font-semibold text-center mt-2">Jazz 24</span>
+                    </button>
+                    <button onclick="playMedia('Local News', 'Radio')" class="tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400">
+                        <div class="w-24 h-24 rounded-full bg-red-600 flex items-center justify-center"><i data-lucide="mic" class="w-12 h-12"></i></div>
+                        <span class="text-3xl font-semibold text-center mt-2">Local News</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAGE 2: Audio Books -->
+            <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
+                <div class="flex flex-col gap-6">
+                    <button onclick="playMedia('The Hobbit - Ch. 4', 'Audiobook')" class="tap-target bg-slate-800 rounded-3xl p-6 flex items-center gap-6 text-left w-full">
+                        <div class="w-28 h-36 bg-amber-700 rounded-xl flex-shrink-0 shadow-lg"></div>
+                        <div class="flex flex-col justify-center">
+                            <span class="text-xl text-amber-400 font-medium uppercase tracking-wider mb-1">Resume Playing</span>
+                            <span class="text-4xl font-bold mb-2">The Hobbit</span>
+                            <span class="text-2xl text-slate-400">Chapter 4 • J.R.R. Tolkien</span>
+                        </div>
+                    </button>
+                    
+                    <button onclick="playMedia('Agatha Christie - M.O.T.O.E', 'Audiobook')" class="tap-target bg-slate-800 rounded-3xl p-6 flex items-center gap-6 text-left w-full">
+                        <div class="w-28 h-36 bg-blue-900 rounded-xl flex-shrink-0 shadow-lg"></div>
+                        <div class="flex flex-col justify-center">
+                            <span class="text-4xl font-bold mb-2 leading-tight">Murder on the Orient Express</span>
+                            <span class="text-2xl text-slate-400">Agatha Christie</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAGE 3: Music Albums -->
+            <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
+                <div class="grid grid-cols-2 gap-6">
+                    <button onclick="playMedia('The Beatles 1', 'Album')" class="tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
+                        <div class="w-40 h-40 bg-red-600 rounded-xl shadow-lg flex items-center justify-center text-6xl font-black text-yellow-400">1</div>
+                        <span class="text-3xl font-bold mt-2">The Beatles</span>
+                    </button>
+                    <button onclick="playMedia('Frank Sinatra Collection', 'Album')" class="tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
+                        <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center"><i data-lucide="disc-3" class="w-20 h-20 text-slate-400"></i></div>
+                        <span class="text-3xl font-bold mt-2">Frank Sinatra</span>
+                    </button>
+                     <button onclick="playMedia('Beethoven Symphonies', 'Album')" class="tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
+                        <div class="w-40 h-40 bg-stone-700 rounded-xl shadow-lg flex items-center justify-center"><i data-lucide="library" class="w-20 h-20 text-stone-400"></i></div>
+                        <span class="text-3xl font-bold mt-2">Beethoven</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAGE 4: Rest & Settings -->
+            <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
+                <!-- Sleep Timer Section -->
+                <div class="mb-10">
+                    <h2 class="text-3xl font-bold mb-6 text-amber-400 border-b border-slate-700 pb-2">Sleep Timer (Turn off after)</h2>
+                    <div class="grid grid-cols-4 gap-4">
+                        <button onclick="setSleep(15)" class="sleep-btn tap-target bg-slate-800 text-3xl font-bold py-8 rounded-3xl border-4 border-transparent">15<br><span class="text-xl font-normal text-slate-400">mins</span></button>
+                        <button onclick="setSleep(30)" class="sleep-btn tap-target bg-slate-800 text-3xl font-bold py-8 rounded-3xl border-4 border-transparent">30<br><span class="text-xl font-normal text-slate-400">mins</span></button>
+                        <button onclick="setSleep(60)" class="sleep-btn tap-target bg-slate-800 text-3xl font-bold py-8 rounded-3xl border-4 border-transparent">60<br><span class="text-xl font-normal text-slate-400">mins</span></button>
+                        <button onclick="setSleep(0)" class="sleep-btn active-sleep tap-target bg-slate-700 text-3xl font-bold py-8 rounded-3xl border-4 border-slate-500">OFF</button>
+                    </div>
+                </div>
+
+                <!-- Noise Generator Section -->
+                <div>
+                    <div class="flex justify-between items-end mb-6 border-b border-slate-700 pb-2">
+                        <h2 class="text-3xl font-bold text-amber-400">Background Noise</h2>
+                        <span class="text-lg text-slate-400 mb-1">(Double tap anywhere to turn on/off)</span>
+                    </div>
+                    
+                    <button onclick="toggleNoise()" id="mainNoiseToggle" class="tap-target w-full bg-slate-800 text-3xl font-bold py-8 rounded-3xl mb-6 flex justify-center items-center gap-4">
+                        <i data-lucide="waves" class="w-10 h-10"></i> 
+                        <span id="noiseToggleText">Turn Noise ON</span>
+                    </button>
+
+                    <div class="grid grid-cols-3 gap-4 mb-8">
+                        <button onclick="setNoiseType('White')" class="noise-type-btn tap-target bg-slate-700 border-4 border-amber-400 text-2xl font-bold py-6 rounded-3xl">White</button>
+                        <button onclick="setNoiseType('Pink')" class="noise-type-btn tap-target bg-slate-800 border-4 border-transparent text-2xl font-bold py-6 rounded-3xl text-pink-300">Pink</button>
+                        <button onclick="setNoiseType('Blue')" class="noise-type-btn tap-target bg-slate-800 border-4 border-transparent text-2xl font-bold py-6 rounded-3xl text-blue-300">Blue</button>
+                    </div>
+
+                    <div class="bg-slate-800 p-8 rounded-3xl">
+                        <label class="text-2xl font-bold mb-6 block">Noise Volume</label>
+                        <input type="range" min="1" max="100" value="50" class="w-full">
+                        <div class="flex justify-between text-xl text-slate-400 mt-4">
+                            <span>Quiet</span>
+                            <span>Loud</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Now Playing Persistent Bar -->
+    <div id="nowPlayingBar" class="absolute bottom-[100px] left-4 right-4 bg-slate-800 rounded-3xl shadow-2xl border-2 border-slate-700 flex items-center p-4 gap-6 hidden transform transition-transform duration-300 translate-y-full">
+        <button onclick="togglePlay()" class="tap-target w-24 h-24 bg-amber-400 text-slate-900 rounded-full flex items-center justify-center shrink-0 shadow-lg">
+            <i data-lucide="pause" id="playIcon" class="w-12 h-12 fill-current"></i>
+        </button>
+        <div class="flex-1 overflow-hidden">
+            <div class="text-xl text-amber-400 font-medium mb-1" id="npType">Now Playing</div>
+            <div class="text-3xl font-bold truncate" id="npTitle">--</div>
+        </div>
+        <button onclick="closeNowPlaying()" class="tap-target w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center shrink-0 text-slate-300">
+            <i data-lucide="x" class="w-8 h-8"></i>
+        </button>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bg-slate-950 flex justify-around items-center h-[100px] pb-4 px-2 shrink-0 z-20 shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
+        <button onclick="goToTab(0)" class="nav-btn text-amber-400 flex flex-col items-center justify-center w-1/4 h-full gap-2 transition-colors">
+            <i data-lucide="radio" class="w-10 h-10"></i>
+            <span class="text-xl font-bold">Radio</span>
+        </button>
+        <button onclick="goToTab(1)" class="nav-btn text-slate-500 flex flex-col items-center justify-center w-1/4 h-full gap-2 transition-colors">
+            <i data-lucide="book-open" class="w-10 h-10"></i>
+            <span class="text-xl font-bold">Books</span>
+        </button>
+        <button onclick="goToTab(2)" class="nav-btn text-slate-500 flex flex-col items-center justify-center w-1/4 h-full gap-2 transition-colors">
+            <i data-lucide="disc" class="w-10 h-10"></i>
+            <span class="text-xl font-bold">Music</span>
+        </button>
+        <button onclick="goToTab(3)" class="nav-btn text-slate-500 flex flex-col items-center justify-center w-1/4 h-full gap-2 transition-colors">
+            <i data-lucide="moon" class="w-10 h-10"></i>
+            <span class="text-xl font-bold">Rest</span>
+        </button>
+    </nav>
+
+    <!-- Toast Notification Overlay for Double Tap -->
+    <div id="toast" class="absolute top-1/3 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-900 text-3xl font-bold py-6 px-10 rounded-full shadow-2xl z-50 pointer-events-none hidden items-center gap-4">
+        <i data-lucide="volume-2" class="w-10 h-10"></i>
+        <span id="toastText">Noise ON</span>
+    </div>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // --- State Management ---
+        let currentTab = 0;
+        let isPlaying = false;
+        let isNoiseOn = false;
+        let noiseType = 'White';
+        let sleepTimer = 0; // minutes
+        const titles = ["Internet Radio", "Audio Books", "Music Albums", "Rest & Settings"];
+
+        // --- Clock Update ---
+        function updateClock() {
+            const now = new Date();
+            let hours = now.getHours();
+            let minutes = now.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; 
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            document.getElementById('clock').innerText = hours + ':' + minutes + ' ' + ampm;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- Navigation & Swiping ---
+        const carousel = document.getElementById('carousel');
+        const touchArea = document.getElementById('touchArea');
+        const navBtns = document.querySelectorAll('.nav-btn');
+        const pageTitle = document.getElementById('pageTitle');
+
+        function goToTab(index) {
+            currentTab = Math.max(0, Math.min(index, 3));
+            carousel.style.transform = `translateX(-${currentTab * 25}%)`;
+            pageTitle.innerText = titles[currentTab];
+            
+            navBtns.forEach((btn, i) => {
+                if (i === currentTab) {
+                    btn.classList.remove('text-slate-500');
+                    btn.classList.add('text-amber-400');
+                } else {
+                    btn.classList.remove('text-amber-400');
+                    btn.classList.add('text-slate-500');
+                }
+            });
+        }
+
+        // Swipe Detection Logic
+        let touchStartX = 0;
+        let touchEndX = 0;
+        const SWIPE_THRESHOLD = 75; // px distance to trigger swipe
+
+        touchArea.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+        }, { passive: true });
+
+        touchArea.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, { passive: true });
+
+        function handleSwipe() {
+            const diff = touchStartX - touchEndX;
+            if (diff > SWIPE_THRESHOLD) goToTab(currentTab + 1); // Swipe left -> next
+            if (diff < -SWIPE_THRESHOLD) goToTab(currentTab - 1); // Swipe right -> prev
+        }
+
+        // --- Double Tap for Noise ---
+        let lastTap = 0;
+        document.body.addEventListener('touchend', function(e) {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+            // Avoid triggering double tap on buttons (let them handle their own clicks)
+            const isButton = e.target.closest('button') || e.target.closest('input');
+            
+            // 500ms window for elderly users to double tap
+            if (tapLength < 500 && tapLength > 50 && !isButton) {
+                toggleNoise();
+                e.preventDefault();
+            }
+            lastTap = currentTime;
+        });
+
+        // --- Media Player Logic ---
+        const nowPlayingBar = document.getElementById('nowPlayingBar');
+        const playIcon = document.getElementById('playIcon');
+        const npTitle = document.getElementById('npTitle');
+        const npType = document.getElementById('npType');
+
+        function playMedia(title, type) {
+            npTitle.innerText = title;
+            npType.innerText = "Playing " + type;
+            isPlaying = true;
+            updatePlayIcon();
+            
+            // Show bar
+            nowPlayingBar.classList.remove('hidden');
+            // Small timeout to allow display:block to apply before animating transform
+            setTimeout(() => {
+                nowPlayingBar.classList.remove('translate-y-full');
+            }, 10);
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            updatePlayIcon();
+        }
+
+        function updatePlayIcon() {
+            if (isPlaying) {
+                playIcon.setAttribute('data-lucide', 'pause');
+                playIcon.classList.add('fill-current');
+            } else {
+                playIcon.setAttribute('data-lucide', 'play');
+                playIcon.classList.add('fill-current');
+            }
+            lucide.createIcons();
+        }
+
+        function closeNowPlaying() {
+            isPlaying = false;
+            nowPlayingBar.classList.add('translate-y-full');
+            setTimeout(() => {
+                nowPlayingBar.classList.add('hidden');
+            }, 300);
+        }
+
+        // --- Noise Generator Logic ---
+        function toggleNoise() {
+            isNoiseOn = !isNoiseOn;
+            
+            // Update Toggle Button UI
+            const toggleBtn = document.getElementById('mainNoiseToggle');
+            const toggleText = document.getElementById('noiseToggleText');
+            if (isNoiseOn) {
+                toggleBtn.classList.replace('bg-slate-800', 'bg-amber-400');
+                toggleBtn.classList.replace('text-white', 'text-slate-900');
+                toggleText.innerText = `Turn Noise OFF (${noiseType})`;
+            } else {
+                toggleBtn.classList.replace('bg-amber-400', 'bg-slate-800');
+                toggleBtn.classList.replace('text-slate-900', 'text-white');
+                toggleText.innerText = "Turn Noise ON";
+            }
+
+            showToast(`Noise ${isNoiseOn ? 'ON' : 'OFF'}`);
+        }
+
+        function setNoiseType(type) {
+            noiseType = type;
+            const btns = document.querySelectorAll('.noise-type-btn');
+            btns.forEach(btn => {
+                btn.classList.replace('bg-slate-700', 'bg-slate-800');
+                btn.classList.remove('border-amber-400');
+                btn.classList.add('border-transparent');
+                if (btn.innerText === type) {
+                    btn.classList.replace('bg-slate-800', 'bg-slate-700');
+                    btn.classList.replace('border-transparent', 'border-amber-400');
+                }
+            });
+            if (isNoiseOn) {
+                 document.getElementById('noiseToggleText').innerText = `Turn Noise OFF (${noiseType})`;
+                 showToast(`${type} Noise Selected`);
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastText').innerText = message;
+            toast.classList.remove('hidden');
+            toast.classList.remove('toast-anim');
+            // Trigger reflow
+            void toast.offsetWidth;
+            toast.classList.add('toast-anim');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 2500);
+        }
+
+        // --- Sleep Timer Logic ---
+        function setSleep(mins) {
+            sleepTimer = mins;
+            const btns = document.querySelectorAll('.sleep-btn');
+            
+            btns.forEach(btn => {
+                btn.classList.replace('border-slate-500', 'border-transparent');
+                btn.classList.replace('bg-slate-700', 'bg-slate-800');
+                if(btn.innerText.includes(mins) || (mins === 0 && btn.innerText === 'OFF')) {
+                     btn.classList.replace('border-transparent', 'border-slate-500');
+                     btn.classList.replace('bg-slate-800', 'bg-slate-700');
+                }
+            });
+
+            const indicator = document.getElementById('sleepIndicator');
+            const sleepTimeTxt = document.getElementById('sleepTime');
+            
+            if (mins > 0) {
+                indicator.classList.remove('hidden');
+                sleepTimeTxt.innerText = mins + 'm';
+                showToast(`Sleep set for ${mins} mins`);
+            } else {
+                indicator.classList.add('hidden');
+                showToast("Sleep timer OFF");
+            }
+        }
+
+    </script>
+</body>
+</html>
