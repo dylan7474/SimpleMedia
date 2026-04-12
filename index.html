@@ -654,7 +654,85 @@
             return entries;
         }
 
-        async function fetchLibrary(path, fallbackData, allowM3U = false) {
+        function humanizeFileName(fileName) {
+            return decodeURIComponent(fileName)
+                .replace(/\.[^.]+$/, '')
+                .replace(/[_-]+/g, ' ')
+                .trim();
+        }
+
+        function parseDirectoryListing(rawHtml, basePath, mediaTypeLabel) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(rawHtml, 'text/html');
+            const links = Array.from(doc.querySelectorAll('a[href]'));
+            const mediaPattern = /\.(mp3|m4a|aac|ogg|wav|flac)$/i;
+            const files = [];
+            const directories = [];
+
+            links.forEach((link) => {
+                const href = link.getAttribute('href');
+                if (!href || href.startsWith('?') || href.startsWith('#')) return;
+                const absolute = new URL(href, basePath);
+                const pathname = absolute.pathname || '';
+                if (href.endsWith('/')) {
+                    if (pathname !== new URL(basePath).pathname) {
+                        directories.push(absolute.toString());
+                    }
+                    return;
+                }
+                if (!mediaPattern.test(pathname)) return;
+
+                const fileName = pathname.split('/').pop();
+                if (!fileName) return;
+
+                files.push({
+                    title: humanizeFileName(fileName),
+                    subtitle: mediaTypeLabel,
+                    url: absolute.toString()
+                });
+            });
+
+            return { files, directories };
+        }
+
+        async function discoverDirectoryMedia(startPath, mediaTypeLabel, maxDepth = 2) {
+            const queue = [{ path: startPath, depth: 0 }];
+            const visited = new Set();
+            const discovered = [];
+            const MAX_ITEMS = 200;
+
+            while (queue.length > 0 && discovered.length < MAX_ITEMS) {
+                const current = queue.shift();
+                if (!current || visited.has(current.path)) continue;
+                visited.add(current.path);
+
+                try {
+                    const response = await fetch(current.path);
+                    if (!response.ok) continue;
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('text/html')) continue;
+
+                    const html = await response.text();
+                    const { files, directories } = parseDirectoryListing(html, response.url, mediaTypeLabel);
+                    discovered.push(...files);
+
+                    if (current.depth < maxDepth) {
+                        directories.forEach((directoryPath) => {
+                            if (!visited.has(directoryPath)) {
+                                queue.push({ path: directoryPath, depth: current.depth + 1 });
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.warn(`Could not scan directory "${current.path}"`, error);
+                }
+            }
+
+            return discovered.slice(0, MAX_ITEMS);
+        }
+
+        async function fetchLibrary(path, fallbackData, options = {}) {
+            const { allowM3U = false, scanDirectory = false, mediaTypeLabel = 'Media' } = options;
             try {
                 const response = await fetch(path);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -668,9 +746,25 @@
                     const parsed = parseM3U(body);
                     if (parsed.length > 0) return parsed;
                 }
-                const data = JSON.parse(body);
-                const normalized = normalizeLibraryData(data);
-                return normalized.length ? normalized : fallbackData;
+                try {
+                    const data = JSON.parse(body);
+                    const normalized = normalizeLibraryData(data);
+                    if (normalized.length) return normalized;
+                } catch (parseError) {
+                    if (scanDirectory) {
+                        let discoveredItems = [];
+                        if (contentType.includes('text/html')) {
+                            const listing = parseDirectoryListing(body, response.url, mediaTypeLabel);
+                            discoveredItems = listing.files;
+                        }
+                        if (discoveredItems.length === 0) {
+                            discoveredItems = await discoverDirectoryMedia(path, mediaTypeLabel);
+                        }
+                        if (discoveredItems.length > 0) return discoveredItems;
+                    }
+                }
+
+                return fallbackData;
             } catch (error) {
                 console.warn(`Using fallback media for "${path}"`, error);
                 return fallbackData;
@@ -731,9 +825,9 @@
         }
 
         async function loadLibraries() {
-            const radio = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, true);
-            const books = await fetchLibrary(appConfig.booksPath, defaultLibrary.books);
-            const music = await fetchLibrary(appConfig.musicPath, defaultLibrary.music);
+            const radio = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
+            const books = await fetchLibrary(appConfig.booksPath, defaultLibrary.books, { scanDirectory: true, mediaTypeLabel: 'Audiobook' });
+            const music = await fetchLibrary(appConfig.musicPath, defaultLibrary.music, { scanDirectory: true, mediaTypeLabel: 'Album' });
             renderRadio(radio);
             renderBookList(books);
             renderMusicGrid(music);
@@ -751,9 +845,9 @@
         }
 
         function saveConfig() {
-            const rPath = document.getElementById('radioPath').value;
-            const bPath = document.getElementById('booksPath').value;
-            const mPath = document.getElementById('musicPath').value;
+            const rPath = document.getElementById('radioPath').value.trim();
+            const bPath = document.getElementById('booksPath').value.trim();
+            const mPath = document.getElementById('musicPath').value.trim();
             appConfig = { radioPath: rPath, booksPath: bPath, musicPath: mPath };
             localStorage.setItem('simpleMediaConfig', JSON.stringify(appConfig));
             loadLibraries();
