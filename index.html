@@ -42,6 +42,7 @@
             -webkit-appearance: none;
             width: 100%;
             background: transparent;
+            touch-action: pan-x; /* Allow horizontal dragging on sliders */
         }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
@@ -497,6 +498,10 @@
             isSeekDragActive = true;
         });
 
+        npSeekBar.addEventListener('touchstart', () => {
+            isSeekDragActive = true;
+        }, { passive: true });
+
         npSeekBar.addEventListener('input', () => {
             if (!seekFromBarValue()) return;
         });
@@ -514,6 +519,15 @@
             isSeekDragActive = false;
             updateNowPlayingProgressUI();
         });
+
+        npSeekBar.addEventListener('touchend', () => {
+            if (!seekFromBarValue()) {
+                isSeekDragActive = false;
+                return;
+            }
+            isSeekDragActive = false;
+            updateNowPlayingProgressUI();
+        }, { passive: true });
 
         appAudio.addEventListener('play', () => {
             isPlaying = true;
