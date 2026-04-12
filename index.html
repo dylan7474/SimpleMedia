@@ -266,6 +266,11 @@
         
         let restTapCount = 0;
         let restTapTimer;
+        let musicBrowseState = {
+            rootPath: '',
+            currentPath: '',
+            history: []
+        };
 
         // --- Clock Update ---
         function updateClock() {
@@ -705,7 +710,12 @@
                 const pathname = absolute.pathname || '';
                 if (href.endsWith('/')) {
                     if (pathname !== new URL(basePath).pathname) {
-                        directories.push(absolute.toString());
+                        const directoryName = pathname.split('/').filter(Boolean).pop() || 'Folder';
+                        directories.push({
+                            title: humanizeFileName(directoryName),
+                            subtitle: 'Folder',
+                            url: absolute.toString()
+                        });
                     }
                     return;
                 }
@@ -746,9 +756,9 @@
                     discovered.push(...files);
 
                     if (current.depth < maxDepth) {
-                        directories.forEach((directoryPath) => {
-                            if (!visited.has(directoryPath)) {
-                                queue.push({ path: directoryPath, depth: current.depth + 1 });
+                        directories.forEach((directory) => {
+                            if (!visited.has(directory.url)) {
+                                queue.push({ path: directory.url, depth: current.depth + 1 });
                             }
                         });
                     }
@@ -839,29 +849,89 @@
             });
         }
 
-        function renderMusicGrid(albums) {
+        function renderMusicGrid(albums, options = {}) {
+            const { showBack = false, currentFolderLabel = '' } = options;
             const musicGrid = document.getElementById('musicGrid');
             musicGrid.innerHTML = '';
+
+            if (showBack) {
+                const backCard = document.createElement('button');
+                backCard.className = 'tap-target bg-slate-900 border-2 border-slate-600 rounded-3xl p-6 flex flex-col items-center gap-3 text-center';
+                backCard.innerHTML = `
+                    <i data-lucide="arrow-left-circle" class="w-14 h-14 text-amber-400"></i>
+                    <span class="text-2xl font-bold">Back</span>
+                    <span class="text-lg text-slate-400 truncate w-full">${currentFolderLabel}</span>
+                `;
+                backCard.addEventListener('click', () => openMusicFolder(musicBrowseState.history.pop() || musicBrowseState.rootPath, false));
+                musicGrid.appendChild(backCard);
+            }
+
             albums.forEach((album, index) => {
                 const card = document.createElement('button');
                 card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center';
-                card.innerHTML = `
-                    <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center text-5xl font-black text-amber-300">${index + 1}</div>
-                    <span class="text-3xl font-bold mt-2">${album.title}</span>
-                    <span class="text-xl text-slate-400">${album.subtitle || 'Album'}</span>
-                `;
-                card.addEventListener('click', () => playMedia(album, 'Album'));
+                if (album.kind === 'directory') {
+                    card.innerHTML = `
+                        <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center">
+                            <i data-lucide="folder-open" class="w-20 h-20 text-amber-300"></i>
+                        </div>
+                        <span class="text-3xl font-bold mt-2">${album.title}</span>
+                        <span class="text-xl text-slate-400">${album.subtitle || 'Album Folder'}</span>
+                    `;
+                    card.addEventListener('click', () => openMusicFolder(album.url, true));
+                } else {
+                    card.innerHTML = `
+                        <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center text-5xl font-black text-amber-300">${index + 1}</div>
+                        <span class="text-3xl font-bold mt-2">${album.title}</span>
+                        <span class="text-xl text-slate-400">${album.subtitle || 'Album'}</span>
+                    `;
+                    card.addEventListener('click', () => playMedia(album, 'Album'));
+                }
                 musicGrid.appendChild(card);
             });
+            lucide.createIcons();
+        }
+
+        async function openMusicFolder(path, pushHistory = false) {
+            const candidatePaths = getPathVariants(path);
+            for (const candidatePath of candidatePaths) {
+                try {
+                    const response = await fetch(candidatePath);
+                    if (!response.ok) continue;
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('text/html')) continue;
+                    const html = await response.text();
+                    const listing = parseDirectoryListing(html, response.url, 'Track');
+                    const albums = [
+                        ...listing.directories.map(folder => ({ ...folder, kind: 'directory', subtitle: 'Album folder' })),
+                        ...listing.files.map(file => ({ ...file, kind: 'track', subtitle: file.subtitle || 'Track' }))
+                    ];
+                    if (pushHistory && musicBrowseState.currentPath) {
+                        musicBrowseState.history.push(musicBrowseState.currentPath);
+                    }
+                    musicBrowseState.currentPath = response.url;
+                    const folderName = decodeURIComponent(new URL(response.url).pathname).split('/').filter(Boolean).pop() || 'Music';
+                    renderMusicGrid(albums, {
+                        showBack: musicBrowseState.history.length > 0,
+                        currentFolderLabel: humanizeFileName(folderName)
+                    });
+                    return true;
+                } catch (error) {
+                    console.warn(`Could not open music folder "${candidatePath}"`, error);
+                }
+            }
+            return false;
         }
 
         async function loadLibraries() {
             const radio = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
             const books = await fetchLibrary(appConfig.booksPath, defaultLibrary.books, { scanDirectory: true, mediaTypeLabel: 'Audiobook' });
-            const music = await fetchLibrary(appConfig.musicPath, defaultLibrary.music, { scanDirectory: true, mediaTypeLabel: 'Album' });
             renderRadio(radio);
             renderBookList(books);
-            renderMusicGrid(music);
+            musicBrowseState = { rootPath: appConfig.musicPath, currentPath: '', history: [] };
+            const loadedFolder = await openMusicFolder(appConfig.musicPath);
+            if (!loadedFolder) {
+                renderMusicGrid(defaultLibrary.music.map(item => ({ ...item, kind: 'track' })));
+            }
         }
 
         function openConfig() {
