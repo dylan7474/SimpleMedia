@@ -4,10 +4,12 @@ set -euo pipefail
 
 PORT_ARG=${1:-3015}
 HOST_ARG=${2:-localhost}
+MEDIA_DIR_ARG=${3:-media}
 PROJECT_NAME="simplemedia"
 IMAGE_NAME="simplemedia"
 CONTAINER_NAME="simplemedia"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MEDIA_DIR_ABS=""
 
 TMP_DOCKERFILE="${SCRIPT_DIR}/.Dockerfile.deploy"
 TMP_SERVER="${SCRIPT_DIR}/.server.deploy.js"
@@ -18,7 +20,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [[ "$MEDIA_DIR_ARG" != /* ]]; then
+  MEDIA_DIR_ABS="${SCRIPT_DIR}/${MEDIA_DIR_ARG}"
+else
+  MEDIA_DIR_ABS="${MEDIA_DIR_ARG}"
+fi
+
+mkdir -p "$MEDIA_DIR_ABS"
+
 echo "=== Deploying ${PROJECT_NAME} on port ${PORT_ARG} (host: ${HOST_ARG}) ==="
+echo "=== Host media directory mounted at: ${MEDIA_DIR_ABS} -> /app/media ==="
 cd "$SCRIPT_DIR"
 
 echo "Generating temporary static server..."
@@ -141,6 +152,7 @@ echo "Starting container..."
 docker run -d \
   --name "$CONTAINER_NAME" \
   -p "${PORT_ARG}:${PORT_ARG}" \
+  -v "${MEDIA_DIR_ABS}:/app/media" \
   --restart unless-stopped \
   "$IMAGE_NAME"
 
@@ -148,5 +160,7 @@ IP_ADDR=$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SO
 
 echo "========================================="
 echo "Deployed ${PROJECT_NAME} at https://${IP_ADDR}:${PORT_ARG}"
+echo "Media folder on host: ${MEDIA_DIR_ABS}"
+echo "Copy files there and access them in the app via /media/..."
 echo "Note: first load uses a self-signed certificate; trust/accept it in your browser."
 echo "========================================="
