@@ -160,6 +160,13 @@
         <div class="flex-1 overflow-hidden">
             <div class="text-xl text-amber-400 font-medium mb-1" id="npType">Now Playing</div>
             <div class="text-3xl font-bold truncate" id="npTitle">--</div>
+            <div id="npProgressContainer" class="mt-3 hidden">
+                <input id="npSeekBar" type="range" min="0" max="1000" value="0" class="w-full">
+                <div class="flex justify-between text-lg text-slate-300 mt-1">
+                    <span id="npCurrentTime">0:00</span>
+                    <span id="npDuration">0:00</span>
+                </div>
+            </div>
         </div>
         <button onclick="closeNowPlaying()" class="tap-target w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center shrink-0 text-slate-300">
             <i data-lucide="x" class="w-8 h-8"></i>
@@ -251,6 +258,8 @@
         let sleepTimeoutId = null;
         let currentMedia = null;
         let currentMediaKey = '';
+        let currentMediaType = '';
+        let isSeekDragActive = false;
         const titles = ["Internet Radio", "Audio Books", "Music Albums", "Rest & Settings"];
         const appAudio = new Audio();
         appAudio.preload = 'none';
@@ -429,6 +438,72 @@
         const playIcon = document.getElementById('playIcon');
         const npTitle = document.getElementById('npTitle');
         const npType = document.getElementById('npType');
+        const npProgressContainer = document.getElementById('npProgressContainer');
+        const npSeekBar = document.getElementById('npSeekBar');
+        const npCurrentTime = document.getElementById('npCurrentTime');
+        const npDuration = document.getElementById('npDuration');
+
+        function formatPlaybackTime(totalSeconds) {
+            const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
+            const hours = Math.floor(safeSeconds / 3600);
+            const minutes = Math.floor((safeSeconds % 3600) / 60);
+            const seconds = safeSeconds % 60;
+            if (hours > 0) {
+                return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+            return `${minutes}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function isSeekableType(type) {
+            return type === 'Audiobook' || type === 'Album';
+        }
+
+        function updateNowPlayingProgressUI() {
+            const isSeekableMedia = isSeekableType(currentMediaType);
+            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
+            if (!isSeekableMedia || !hasDuration) {
+                npProgressContainer.classList.add('hidden');
+                npSeekBar.value = '0';
+                npCurrentTime.innerText = '0:00';
+                npDuration.innerText = '0:00';
+                return;
+            }
+
+            npProgressContainer.classList.remove('hidden');
+            const duration = appAudio.duration;
+            const currentTime = Math.min(Math.max(appAudio.currentTime || 0, 0), duration);
+
+            if (!isSeekDragActive) {
+                const ratio = duration ? currentTime / duration : 0;
+                npSeekBar.value = String(Math.round(ratio * 1000));
+            }
+
+            npCurrentTime.innerText = formatPlaybackTime(currentTime);
+            npDuration.innerText = formatPlaybackTime(duration);
+        }
+
+        npSeekBar.addEventListener('input', () => {
+            const isSeekableMedia = isSeekableType(currentMediaType);
+            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
+            if (!isSeekableMedia || !hasDuration) return;
+            isSeekDragActive = true;
+            const seekRatio = Number(npSeekBar.value) / 1000;
+            const previewSeconds = seekRatio * appAudio.duration;
+            npCurrentTime.innerText = formatPlaybackTime(previewSeconds);
+        });
+
+        npSeekBar.addEventListener('change', () => {
+            const isSeekableMedia = isSeekableType(currentMediaType);
+            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
+            if (!isSeekableMedia || !hasDuration) {
+                isSeekDragActive = false;
+                return;
+            }
+            const seekRatio = Number(npSeekBar.value) / 1000;
+            appAudio.currentTime = seekRatio * appAudio.duration;
+            isSeekDragActive = false;
+            updateNowPlayingProgressUI();
+        });
 
         appAudio.addEventListener('play', () => {
             isPlaying = true;
@@ -456,7 +531,16 @@
             isPlaying = false;
             updatePlayIcon();
             updateMediaSelectionUI();
+            updateNowPlayingProgressUI();
             showToast('Could not play this source', 'alert-triangle');
+        });
+
+        appAudio.addEventListener('loadedmetadata', updateNowPlayingProgressUI);
+        appAudio.addEventListener('durationchange', updateNowPlayingProgressUI);
+        appAudio.addEventListener('timeupdate', updateNowPlayingProgressUI);
+        appAudio.addEventListener('seeked', () => {
+            isSeekDragActive = false;
+            updateNowPlayingProgressUI();
         });
 
         function makeMediaKey(item, type) {
@@ -538,10 +622,12 @@
 
             currentMedia = playableItem;
             currentMediaKey = mediaKey || makeMediaKey(item, type);
+            currentMediaType = type;
             npTitle.innerText = item.title;
             npType.innerText = "Playing " + type;
             appAudio.src = playableItem.url;
             appAudio.load();
+            updateNowPlayingProgressUI();
             try {
                 await appAudio.play();
                 addLog('info', `Started playback`, `${type}: ${item.title} (${playableItem.url})`);
@@ -552,6 +638,8 @@
             }
 
             updateMediaSelectionUI();
+            nowPlayingBar.classList.remove('hidden');
+            requestAnimationFrame(() => nowPlayingBar.classList.remove('translate-y-full'));
         }
 
         function setAlbumPlaybackQueue(tracks, startTrackUrl) {
@@ -619,7 +707,10 @@
             appAudio.load();
             currentMedia = null;
             currentMediaKey = '';
+            currentMediaType = '';
+            isSeekDragActive = false;
             albumPlaybackQueue = { tracks: [], currentIndex: -1 };
+            updateNowPlayingProgressUI();
             updateMediaSelectionUI();
             nowPlayingBar.classList.add('translate-y-full');
             setTimeout(() => {
