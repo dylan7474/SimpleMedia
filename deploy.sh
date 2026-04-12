@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-PORT_ARG=${1:-3014}
+PORT_ARG=${1:-3015}
 HOST_ARG=${2:-localhost}
 PROJECT_NAME="simplemedia"
 IMAGE_NAME="simplemedia"
