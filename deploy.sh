@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-PORT_ARG=${1:-3015}
-HOST_ARG=${2:-localhost}
-MEDIA_DIR_ARG=${3:-media}
+PORT_ARG=3014
+HOST_ARG=localhost
+MEDIA_DIR_ARG=${1:-media}
 PROJECT_NAME="simplemedia"
 IMAGE_NAME="simplemedia"
 CONTAINER_NAME="simplemedia"
@@ -24,6 +24,12 @@ if [[ "$MEDIA_DIR_ARG" != /* ]]; then
   MEDIA_DIR_ABS="${SCRIPT_DIR}/${MEDIA_DIR_ARG}"
 else
   MEDIA_DIR_ABS="${MEDIA_DIR_ARG}"
+fi
+
+if [[ $# -gt 1 ]]; then
+  echo "Usage: ./deploy.sh [MEDIA_DIR]"
+  echo "Example: ./deploy.sh /path/to/media"
+  exit 1
 fi
 
 mkdir -p "$MEDIA_DIR_ABS"
