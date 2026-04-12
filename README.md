@@ -32,13 +32,25 @@ Use the included script (fixed at `https://localhost:3014`):
 ./deploy.sh
 ```
 
-By default, the deploy script mounts `./media` from your host into the container at `/app/media` (served as `/media/...` in the browser). Put audio files in that host folder so the app can access them.
+By default, the deploy script mounts `./media` from your host into the container at `/app/Media` (served as `/Media/...` in the browser). Put audio files in that host folder so the app can access them.
 
 Or provide a custom host media folder as the only argument:
 
 ```bash
 ./deploy.sh /path/to/your/media
 ```
+
+Example with your own top-level media folder:
+
+```bash
+./deploy.sh /home/djones/Media
+```
+
+Then in the hidden configuration screen use:
+
+- **Media Root Folder Path**: `/Media/`
+- **Music Albums Folder Path**: `Music` (resolves to `/Media/Music`)
+- **Audio Books Folder Path**: `AudioBooks` (resolves to `/Media/AudioBooks`)
 
 ## Basic controls
 

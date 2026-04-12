@@ -209,13 +209,19 @@
             </div>
             
             <div class="space-y-4">
+                <label class="block text-2xl font-bold text-amber-400">Media Root Folder Path</label>
+                <input type="text" id="mediaRootPath" value="/Media/" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
+                <p class="text-slate-400 text-lg">When Books/Music are simple names, this root is used. Example: <strong>Music</strong> =&gt; <strong>/Media/Music</strong>.</p>
+            </div>
+
+            <div class="space-y-4">
                 <label class="block text-2xl font-bold text-amber-400">Audio Books Folder Path</label>
-                <input type="text" id="booksPath" value="/media/audiobooks/" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
+                <input type="text" id="booksPath" value="AudioBooks" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
             </div>
 
             <div class="space-y-4">
                 <label class="block text-2xl font-bold text-amber-400">Music Albums Folder Path</label>
-                <input type="text" id="musicPath" value="/media/music/" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
+                <input type="text" id="musicPath" value="Music" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
             </div>
 
             <button onclick="saveConfig()" class="w-full bg-amber-500 text-slate-900 text-3xl font-bold py-6 rounded-2xl mt-8 shadow-lg tap-target">
@@ -247,8 +253,9 @@
         };
         const configDefaults = {
             radioPath: '/api/radio-stations',
-            booksPath: '/media/Audiobooks/',
-            musicPath: '/media/Music/'
+            mediaRootPath: '/Media/',
+            booksPath: 'AudioBooks',
+            musicPath: 'Music'
         };
         let appConfig = { ...configDefaults };
         
@@ -618,6 +625,7 @@
                 console.error('Could not parse saved config', error);
             }
             document.getElementById('radioPath').value = appConfig.radioPath;
+            document.getElementById('mediaRootPath').value = appConfig.mediaRootPath;
             document.getElementById('booksPath').value = appConfig.booksPath;
             document.getElementById('musicPath').value = appConfig.musicPath;
         }
@@ -654,9 +662,22 @@
                 .trim();
         }
 
-        function getPathVariants(inputPath) {
+        function resolveConfiguredPath(inputPath) {
             const trimmed = (inputPath || '').trim();
             if (!trimmed) return [];
+            if (/^https?:\/\//i.test(trimmed)) return [trimmed];
+            if (trimmed.startsWith('/')) return [trimmed];
+
+            const root = (appConfig.mediaRootPath || configDefaults.mediaRootPath || '/Media/').trim();
+            const normalizedRoot = root.endsWith('/') ? root : `${root}/`;
+            return [`${normalizedRoot}${trimmed}`];
+        }
+
+        function getPathVariants(inputPath) {
+            const resolvedPaths = resolveConfiguredPath(inputPath);
+            if (resolvedPaths.length === 0) return [];
+            const trimmed = resolvedPaths[0];
+            if (/^https?:\/\//i.test(trimmed)) return [trimmed];
             const hasTrailingSlash = trimmed.endsWith('/');
             const rawSegments = trimmed.split('/').filter(Boolean);
             if (rawSegments.length === 0) return [trimmed];
@@ -680,10 +701,10 @@
                 variants.add(candidate);
             });
 
-            // Common mounted root path in deploy.sh is /media.
-            if (rawSegments[0] && rawSegments[0] !== 'media') {
+            // Common mounted root path in deploy.sh is /Media.
+            if (rawSegments[0] && rawSegments[0].toLowerCase() !== 'media') {
                 const mediaRootSegments = [...rawSegments];
-                mediaRootSegments[0] = 'media';
+                mediaRootSegments[0] = 'Media';
                 variants.add(`/${mediaRootSegments.join('/')}${hasTrailingSlash ? '/' : ''}`);
             }
 
@@ -767,7 +788,7 @@
 
         async function fetchLibrary(path, fallbackData, options = {}) {
             const { allowM3U = false, scanDirectory = false, mediaTypeLabel = 'Media' } = options;
-            const pathCandidates = scanDirectory ? getPathVariants(path) : [path];
+            const pathCandidates = scanDirectory ? getPathVariants(path) : resolveConfiguredPath(path);
             try {
                 for (const candidatePath of pathCandidates) {
                     const response = await fetch(candidatePath);
@@ -971,9 +992,10 @@
 
         function saveConfig() {
             const rPath = document.getElementById('radioPath').value.trim();
+            const rootPath = document.getElementById('mediaRootPath').value.trim();
             const bPath = document.getElementById('booksPath').value.trim();
             const mPath = document.getElementById('musicPath').value.trim();
-            appConfig = { radioPath: rPath, booksPath: bPath, musicPath: mPath };
+            appConfig = { radioPath: rPath, mediaRootPath: rootPath, booksPath: bPath, musicPath: mPath };
             localStorage.setItem('simpleMediaConfig', JSON.stringify(appConfig));
             loadLibraries();
             showToast("Configuration Saved", 'check-circle');
