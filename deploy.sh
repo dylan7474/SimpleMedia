@@ -83,13 +83,78 @@ function sendFile(filePath, res) {
   });
 }
 
+function sendDirectoryListing(dirPath, reqPath, res) {
+  fs.readdir(dirPath, { withFileTypes: true }, (err, entries) => {
+    if (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Could not read directory');
+      return;
+    }
+
+    const normalizedReqPath = reqPath.endsWith('/') ? reqPath : `${reqPath}/`;
+    const title = `Index of ${normalizedReqPath}`;
+    const sortedEntries = entries
+      .filter((entry) => entry.name !== '.')
+      .sort((a, b) => {
+        if (a.isDirectory() && !b.isDirectory()) return -1;
+        if (!a.isDirectory() && b.isDirectory()) return 1;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
+
+    const parentLink = normalizedReqPath === '/' ? '' : '<li><a href="../">../</a></li>';
+    const listItems = sortedEntries
+      .map((entry) => {
+        const suffix = entry.isDirectory() ? '/' : '';
+        const encodedName = encodeURIComponent(entry.name) + suffix;
+        const displayName = `${entry.name}${suffix}`;
+        return `<li><a href="${encodedName}">${displayName}</a></li>`;
+      })
+      .join('\n');
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${title}</title>
+</head>
+<body>
+  <h1>${title}</h1>
+  <ul>
+    ${parentLink}
+    ${listItems}
+  </ul>
+</body>
+</html>`;
+
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache',
+    });
+    res.end(html);
+  });
+}
+
 const requestHandler = (req, res) => {
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
   const requestedPath = urlPath === '/' ? '/index.html' : urlPath;
   const safePath = path.normalize(requestedPath).replace(/^([.][./\\])+/, '');
   const filePath = path.join(ROOT, safePath);
 
-  sendFile(filePath, res);
+  fs.stat(filePath, (err, stat) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Not found');
+      return;
+    }
+
+    if (stat.isDirectory()) {
+      sendDirectoryListing(filePath, requestedPath, res);
+      return;
+    }
+
+    sendFile(filePath, res);
+  });
 };
 
 if (ENABLE_HTTPS) {
