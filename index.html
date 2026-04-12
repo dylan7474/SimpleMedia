@@ -449,6 +449,7 @@
         let pendingSeekRatio = null;
         let deferredSeekTime = null;
         let isSeekInteractionActive = false;
+        let shouldResumeAfterSeek = false;
 
         function formatPlaybackTime(totalSeconds) {
             const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
@@ -550,6 +551,7 @@
         }
 
         function beginSeekInteraction() {
+            shouldResumeAfterSeek = isSeekableType(currentMediaType) && !appAudio.paused;
             isSeekInteractionActive = true;
             isSeekDragActive = true;
             pendingSeekRatio = Math.min(Math.max(Number(npSeekBar.value) / 1000, 0), 1);
@@ -569,7 +571,6 @@
         npSeekBar.addEventListener('input', () => {
             beginSeekInteraction();
             seekFromBarValue();
-            commitSeekFromBarValue();
             updateNowPlayingProgressUI();
         });
 
@@ -580,14 +581,25 @@
 
         const finalizeSeek = () => {
             if (!isSeekDragActive && !isSeekInteractionActive) return;
+            const shouldResume = shouldResumeAfterSeek;
             commitSeekFromBarValue();
             endSeekInteraction();
+            if (shouldResume && appAudio.paused) {
+                appAudio.play().catch(() => {});
+            }
+            shouldResumeAfterSeek = false;
         };
 
         npSeekBar.addEventListener('pointerup', finalizeSeek);
-        npSeekBar.addEventListener('pointercancel', endSeekInteraction);
+        npSeekBar.addEventListener('pointercancel', () => {
+            endSeekInteraction();
+            shouldResumeAfterSeek = false;
+        });
         npSeekBar.addEventListener('touchend', finalizeSeek, { passive: true });
-        npSeekBar.addEventListener('blur', endSeekInteraction);
+        npSeekBar.addEventListener('blur', () => {
+            endSeekInteraction();
+            shouldResumeAfterSeek = false;
+        });
         document.addEventListener('pointerup', finalizeSeek, { passive: true });
 
         appAudio.addEventListener('play', () => {
