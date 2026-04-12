@@ -482,25 +482,35 @@
             npDuration.innerText = formatPlaybackTime(duration);
         }
 
-        npSeekBar.addEventListener('input', () => {
+        function seekFromBarValue() {
             const isSeekableMedia = isSeekableType(currentMediaType);
             const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
-            if (!isSeekableMedia || !hasDuration) return;
-            isSeekDragActive = true;
+            if (!isSeekableMedia || !hasDuration) return false;
             const seekRatio = Number(npSeekBar.value) / 1000;
             const previewSeconds = seekRatio * appAudio.duration;
+            appAudio.currentTime = previewSeconds;
             npCurrentTime.innerText = formatPlaybackTime(previewSeconds);
+            return true;
+        }
+
+        npSeekBar.addEventListener('pointerdown', () => {
+            isSeekDragActive = true;
+        });
+
+        npSeekBar.addEventListener('input', () => {
+            if (!seekFromBarValue()) return;
         });
 
         npSeekBar.addEventListener('change', () => {
-            const isSeekableMedia = isSeekableType(currentMediaType);
-            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
-            if (!isSeekableMedia || !hasDuration) {
+            if (!seekFromBarValue()) {
                 isSeekDragActive = false;
                 return;
             }
-            const seekRatio = Number(npSeekBar.value) / 1000;
-            appAudio.currentTime = seekRatio * appAudio.duration;
+            isSeekDragActive = false;
+            updateNowPlayingProgressUI();
+        });
+
+        npSeekBar.addEventListener('pointerup', () => {
             isSeekDragActive = false;
             updateNowPlayingProgressUI();
         });
