@@ -32,7 +32,7 @@ Use the included script (fixed at `https://localhost:3014`):
 ./deploy.sh
 ```
 
-By default, the deploy script mounts `./media` from your host into the container at `/app/Media` (served as `/Media/...` in the browser). Put audio files in that host folder so the app can access them.
+By default, the deploy script mounts `./media` from your host into the container and exposes each top-level subfolder directly at the web root. Put audio files in subfolders so the app can access them.
 
 Or provide a custom host media folder as the only argument:
 
@@ -48,9 +48,46 @@ Example with your own top-level media folder:
 
 Then in the hidden configuration screen use:
 
-- **Media Root Folder Path**: `/Media/`
-- **Music Albums Folder Path**: `Music` (resolves to `/Media/Music`)
-- **Audio Books Folder Path**: `AudioBooks` (resolves to `/Media/AudioBooks`)
+- **Music Albums Folder Path**: `Music` (resolves to `/Music`)
+- **Audio Books Folder Path**: `AudioBooks` (resolves to `/AudioBooks`)
+
+### Worked example: deploy + configure end-to-end
+
+If your host media folder looks like this:
+
+```text
+/home/djones/Media
+├── Music
+│   ├── Abbey Road
+│   │   ├── 01 Come Together.mp3
+│   │   └── 02 Something.mp3
+│   └── Kind Of Blue
+│       ├── 01 So What.flac
+│       └── 02 Freddie Freeloader.flac
+└── AudioBooks
+    └── Moby Dick
+        ├── 01 Chapter 1.mp3
+        └── 02 Chapter 2.mp3
+```
+
+1. Deploy using that folder:
+
+   ```bash
+   ./deploy.sh /home/djones/Media
+   ```
+
+2. Open `https://localhost:3014` (or the printed LAN URL) and accept the self-signed cert warning the first time.
+3. Open hidden configuration by tapping **Rest** 3 times quickly.
+4. Set:
+   - **Music Albums Folder Path**: `Music`
+   - **Audio Books Folder Path**: `AudioBooks`
+   - (Optional) **Internet Radio Source** to your JSON/M3U endpoint
+5. Tap **Save Configuration**.
+
+Result:
+- The Books tab reads media from `/AudioBooks`.
+- The Music tab reads media from `/Music`.
+- You do **not** need to set or manage a separate media root in the app.
 
 ## Basic controls
 
