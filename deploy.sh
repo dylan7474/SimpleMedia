@@ -35,7 +35,7 @@ fi
 mkdir -p "$MEDIA_DIR_ABS"
 
 echo "=== Deploying ${PROJECT_NAME} on port ${PORT_ARG} (host: ${HOST_ARG}) ==="
-echo "=== Host media directory mounted at: ${MEDIA_DIR_ABS} -> /app/Media ==="
+echo "=== Host media directory mounted at: ${MEDIA_DIR_ABS} -> /media-root ==="
 cd "$SCRIPT_DIR"
 
 echo "Generating temporary static server..."
@@ -193,6 +193,19 @@ if [ "${ENABLE_HTTPS:-1}" = "1" ]; then
   fi
 fi
 
+if [ -d /media-root ]; then
+  echo "Linking media subfolders from /media-root into /app..."
+  find /media-root -mindepth 1 -maxdepth 1 -type d | while IFS= read -r media_dir; do
+    folder_name="$(basename "$media_dir")"
+    target_path="/app/${folder_name}"
+    if [ -e "$target_path" ]; then
+      echo "Skipping ${target_path}; path already exists."
+      continue
+    fi
+    ln -s "$media_dir" "$target_path"
+  done
+fi
+
 exec node /app/server.js
 ENTRYPOINT_EOF
 
@@ -226,7 +239,7 @@ echo "Starting container..."
 docker run -d \
   --name "$CONTAINER_NAME" \
   -p "${PORT_ARG}:${PORT_ARG}" \
-  -v "${MEDIA_DIR_ABS}:/app/Media" \
+  -v "${MEDIA_DIR_ABS}:/media-root" \
   --restart unless-stopped \
   "$IMAGE_NAME"
 
@@ -235,7 +248,7 @@ IP_ADDR=$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SO
 echo "========================================="
 echo "Deployed ${PROJECT_NAME} at https://${IP_ADDR}:${PORT_ARG}"
 echo "Media folder on host: ${MEDIA_DIR_ABS}"
-echo "Copy files there and access them in the app via /Media/..."
-echo "Examples: Music => /Media/Music, AudioBooks => /Media/AudioBooks"
+echo "Copy files there in subfolders and access them directly..."
+echo "Examples: Music => /Music, AudioBooks => /AudioBooks"
 echo "Note: first load uses a self-signed certificate; trust/accept it in your browser."
 echo "========================================="
