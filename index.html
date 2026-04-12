@@ -661,6 +661,35 @@
                 .trim();
         }
 
+        function getPathVariants(inputPath) {
+            const trimmed = (inputPath || '').trim();
+            if (!trimmed) return [];
+            const hasTrailingSlash = trimmed.endsWith('/');
+            const rawSegments = trimmed.split('/').filter(Boolean);
+            if (rawSegments.length === 0) return [trimmed];
+
+            const last = rawSegments[rawSegments.length - 1];
+            const variants = new Set([trimmed]);
+            const alternates = [
+                last.toLowerCase(),
+                last.toUpperCase(),
+                last[0].toUpperCase() + last.slice(1).toLowerCase()
+            ];
+
+            // Common audiobook casing seen in host media folders.
+            if (last.toLowerCase() === 'audiobooks') {
+                alternates.push('AudioBooks');
+            }
+
+            alternates.forEach((candidateLast) => {
+                const candidateSegments = [...rawSegments.slice(0, -1), candidateLast];
+                const candidate = `/${candidateSegments.join('/')}${hasTrailingSlash ? '/' : ''}`;
+                variants.add(candidate);
+            });
+
+            return Array.from(variants);
+        }
+
         function parseDirectoryListing(rawHtml, basePath, mediaTypeLabel) {
             const parser = new DOMParser();
             const doc = parser.parseFromString(rawHtml, 'text/html');
@@ -733,37 +762,39 @@
 
         async function fetchLibrary(path, fallbackData, options = {}) {
             const { allowM3U = false, scanDirectory = false, mediaTypeLabel = 'Media' } = options;
+            const pathCandidates = scanDirectory ? getPathVariants(path) : [path];
             try {
-                const response = await fetch(path);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const contentType = response.headers.get('content-type') || '';
-                const body = await response.text();
-                const looksLikeM3U = contentType.includes('mpegurl')
-                    || contentType.includes('m3u')
-                    || body.trim().startsWith('#EXTM3U')
-                    || path.toLowerCase().endsWith('.m3u');
-                if (allowM3U && looksLikeM3U) {
-                    const parsed = parseM3U(body);
-                    if (parsed.length > 0) return parsed;
-                }
-                try {
-                    const data = JSON.parse(body);
-                    const normalized = normalizeLibraryData(data);
-                    if (normalized.length) return normalized;
-                } catch (parseError) {
-                    if (scanDirectory) {
-                        let discoveredItems = [];
-                        if (contentType.includes('text/html')) {
-                            const listing = parseDirectoryListing(body, response.url, mediaTypeLabel);
-                            discoveredItems = listing.files;
+                for (const candidatePath of pathCandidates) {
+                    const response = await fetch(candidatePath);
+                    if (!response.ok) continue;
+                    const contentType = response.headers.get('content-type') || '';
+                    const body = await response.text();
+                    const looksLikeM3U = contentType.includes('mpegurl')
+                        || contentType.includes('m3u')
+                        || body.trim().startsWith('#EXTM3U')
+                        || candidatePath.toLowerCase().endsWith('.m3u');
+                    if (allowM3U && looksLikeM3U) {
+                        const parsed = parseM3U(body);
+                        if (parsed.length > 0) return parsed;
+                    }
+                    try {
+                        const data = JSON.parse(body);
+                        const normalized = normalizeLibraryData(data);
+                        if (normalized.length) return normalized;
+                    } catch (parseError) {
+                        if (scanDirectory) {
+                            let discoveredItems = [];
+                            if (contentType.includes('text/html')) {
+                                const listing = parseDirectoryListing(body, response.url, mediaTypeLabel);
+                                discoveredItems = listing.files;
+                            }
+                            if (discoveredItems.length === 0) {
+                                discoveredItems = await discoverDirectoryMedia(candidatePath, mediaTypeLabel);
+                            }
+                            if (discoveredItems.length > 0) return discoveredItems;
                         }
-                        if (discoveredItems.length === 0) {
-                            discoveredItems = await discoverDirectoryMedia(path, mediaTypeLabel);
-                        }
-                        if (discoveredItems.length > 0) return discoveredItems;
                     }
                 }
-
                 return fallbackData;
             } catch (error) {
                 console.warn(`Using fallback media for "${path}"`, error);
