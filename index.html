@@ -274,6 +274,10 @@
             currentPath: '',
             history: []
         };
+        let albumPlaybackQueue = {
+            tracks: [],
+            currentIndex: -1
+        };
         const LOG_STORAGE_KEY = 'simpleMediaLogs';
         const MAX_LOG_ENTRIES = 200;
         let appLogs = [];
@@ -438,7 +442,10 @@
             updateMediaSelectionUI();
         });
 
-        appAudio.addEventListener('ended', () => {
+        appAudio.addEventListener('ended', async () => {
+            if (await playNextAlbumTrack()) {
+                return;
+            }
             isPlaying = false;
             updatePlayIcon();
             updateMediaSelectionUI();
@@ -519,6 +526,9 @@
                 addLog('warn', `Playback blocked: missing URL for ${type}`, JSON.stringify(item || {}));
                 return;
             }
+            if (type !== 'Album') {
+                albumPlaybackQueue = { tracks: [], currentIndex: -1 };
+            }
             const playableItem = await resolvePlayableMedia(item, type);
             if (!playableItem || !playableItem.url || !isLikelyAudioUrl(playableItem.url)) {
                 showToast('No playable audio file found', 'alert-triangle');
@@ -542,6 +552,41 @@
             }
 
             updateMediaSelectionUI();
+        }
+
+        function setAlbumPlaybackQueue(tracks, startTrackUrl) {
+            if (!Array.isArray(tracks) || tracks.length === 0 || !startTrackUrl) {
+                albumPlaybackQueue = { tracks: [], currentIndex: -1 };
+                return;
+            }
+
+            const trackIndex = tracks.findIndex(track => track.url === startTrackUrl);
+            if (trackIndex < 0) {
+                albumPlaybackQueue = { tracks: [], currentIndex: -1 };
+                return;
+            }
+
+            albumPlaybackQueue = {
+                tracks,
+                currentIndex: trackIndex
+            };
+        }
+
+        async function playNextAlbumTrack() {
+            const { tracks, currentIndex } = albumPlaybackQueue;
+            if (!Array.isArray(tracks) || tracks.length === 0) return false;
+
+            const nextIndex = currentIndex + 1;
+            if (nextIndex >= tracks.length) {
+                albumPlaybackQueue = { tracks: [], currentIndex: -1 };
+                return false;
+            }
+
+            const nextTrack = tracks[nextIndex];
+            albumPlaybackQueue.currentIndex = nextIndex;
+            const mediaKey = makeMediaKey(nextTrack, 'Album');
+            await playMedia(nextTrack, 'Album', mediaKey);
+            return true;
         }
 
         function togglePlay() {
@@ -574,6 +619,7 @@
             appAudio.load();
             currentMedia = null;
             currentMediaKey = '';
+            albumPlaybackQueue = { tracks: [], currentIndex: -1 };
             updateMediaSelectionUI();
             nowPlayingBar.classList.add('translate-y-full');
             setTimeout(() => {
@@ -1085,6 +1131,8 @@
             const { showBack = false, currentFolderLabel = '' } = options;
             const musicGrid = document.getElementById('musicGrid');
             musicGrid.innerHTML = '';
+            const trackItems = albums.filter(item => item.kind !== 'directory');
+            const trackIndexByUrl = new Map(trackItems.map((track, idx) => [track.url, idx]));
 
             if (showBack) {
                 const backCard = document.createElement('button');
@@ -1133,6 +1181,12 @@
                         if (currentMediaKey === mediaKey) {
                             togglePlay();
                             return;
+                        }
+                        const startTrackIndex = trackIndexByUrl.get(album.url);
+                        if (startTrackIndex !== undefined) {
+                            setAlbumPlaybackQueue(trackItems, album.url);
+                        } else {
+                            setAlbumPlaybackQueue([], '');
                         }
                         playMedia(album, 'Album', mediaKey);
                     });
