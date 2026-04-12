@@ -35,7 +35,7 @@ fi
 mkdir -p "$MEDIA_DIR_ABS"
 
 echo "=== Deploying ${PROJECT_NAME} on port ${PORT_ARG} (host: ${HOST_ARG}) ==="
-echo "=== Host media directory mounted at: ${MEDIA_DIR_ABS} -> /app/media ==="
+echo "=== Host media directory mounted at: ${MEDIA_DIR_ABS} -> /app/Media ==="
 cd "$SCRIPT_DIR"
 
 echo "Generating temporary static server..."
@@ -138,7 +138,10 @@ function sendDirectoryListing(dirPath, reqPath, res) {
 const requestHandler = (req, res) => {
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
   const requestedPath = urlPath === '/' ? '/index.html' : urlPath;
-  const safePath = path.normalize(requestedPath).replace(/^([.][./\\])+/, '');
+  const safePath = path
+    .normalize(requestedPath)
+    .replace(/^([.][./\\])+/, '')
+    .replace(/^[/\\]+/, '');
   const filePath = path.join(ROOT, safePath);
 
   fs.stat(filePath, (err, stat) => {
@@ -223,7 +226,7 @@ echo "Starting container..."
 docker run -d \
   --name "$CONTAINER_NAME" \
   -p "${PORT_ARG}:${PORT_ARG}" \
-  -v "${MEDIA_DIR_ABS}:/app/media" \
+  -v "${MEDIA_DIR_ABS}:/app/Media" \
   --restart unless-stopped \
   "$IMAGE_NAME"
 
@@ -232,6 +235,7 @@ IP_ADDR=$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SO
 echo "========================================="
 echo "Deployed ${PROJECT_NAME} at https://${IP_ADDR}:${PORT_ARG}"
 echo "Media folder on host: ${MEDIA_DIR_ABS}"
-echo "Copy files there and access them in the app via /media/..."
+echo "Copy files there and access them in the app via /Media/..."
+echo "Examples: Music => /Media/Music, AudioBooks => /Media/AudioBooks"
 echo "Note: first load uses a self-signed certificate; trust/accept it in your browser."
 echo "========================================="
