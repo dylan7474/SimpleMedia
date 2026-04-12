@@ -26,7 +26,7 @@ Then open <http://localhost:8080>.
 
 ### Option C: deploy with Docker helper
 
-Use the included script (defaults to port `3014`):
+Use the included script (fixed at `https://localhost:3014`):
 
 ```bash
 ./deploy.sh
@@ -34,16 +34,10 @@ Use the included script (defaults to port `3014`):
 
 By default, the deploy script mounts `./media` from your host into the container at `/app/media` (served as `/media/...` in the browser). Put audio files in that host folder so the app can access them.
 
-Or provide custom port and hostname:
+Or provide a custom host media folder as the only argument:
 
 ```bash
-./deploy.sh 8080 localhost
-```
-
-You can also pass a custom host media folder as a third argument:
-
-```bash
-./deploy.sh 8080 localhost /path/to/your/media
+./deploy.sh /path/to/your/media
 ```
 
 ## Basic controls
