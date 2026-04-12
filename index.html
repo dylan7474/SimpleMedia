@@ -447,20 +447,58 @@
             showToast('Could not play this source', 'alert-triangle');
         });
 
+        async function resolvePlayableMedia(item, type) {
+            if (!item || !item.url) return null;
+            if (isLikelyAudioUrl(item.url)) return item;
+
+            try {
+                const candidatePaths = getPathVariants(item.url);
+                for (const candidatePath of candidatePaths) {
+                    const response = await fetch(candidatePath);
+                    if (!response.ok) continue;
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) continue;
+
+                    const html = await response.text();
+                    const listing = parseDirectoryListing(html, response.url, type);
+                    if (listing.files.length > 0) {
+                        const firstTrack = listing.files[0];
+                        return {
+                            ...item,
+                            title: item.title,
+                            subtitle: item.subtitle || type,
+                            url: firstTrack.url
+                        };
+                    }
+                }
+            } catch (error) {
+                addLog('warn', `Could not resolve playable media for ${type}`, `${item.title || 'Unknown'} :: ${error && error.message ? error.message : error}`);
+            }
+
+            return item;
+        }
+
         async function playMedia(item, type) {
             if (!item || !item.url) {
                 showToast('This item has no playable file', 'alert-triangle');
                 addLog('warn', `Playback blocked: missing URL for ${type}`, JSON.stringify(item || {}));
                 return;
             }
-            currentMedia = item;
+            const playableItem = await resolvePlayableMedia(item, type);
+            if (!playableItem || !playableItem.url || !isLikelyAudioUrl(playableItem.url)) {
+                showToast('No playable audio file found', 'alert-triangle');
+                addLog('error', `Playback failed for ${type}: ${item.title}`, 'Could not locate a supported audio file.');
+                return;
+            }
+
+            currentMedia = playableItem;
             npTitle.innerText = item.title;
             npType.innerText = "Playing " + type;
-            appAudio.src = item.url;
+            appAudio.src = playableItem.url;
             appAudio.load();
             try {
                 await appAudio.play();
-                addLog('info', `Started playback`, `${type}: ${item.title} (${item.url})`);
+                addLog('info', `Started playback`, `${type}: ${item.title} (${playableItem.url})`);
             } catch (error) {
                 showToast('Tap again to allow audio playback', 'volume-x');
                 addLog('error', `Playback failed for ${type}: ${item.title}`, error && error.message ? error.message : error);
@@ -733,6 +771,22 @@
                 .trim();
         }
 
+        function ensureDirectoryBaseUrl(basePath) {
+            try {
+                const url = new URL(basePath, window.location.href);
+                if (!url.pathname.endsWith('/')) {
+                    url.pathname += '/';
+                }
+                return url.toString();
+            } catch (error) {
+                return basePath.endsWith('/') ? basePath : `${basePath}/`;
+            }
+        }
+
+        function isLikelyAudioUrl(url) {
+            return /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)(\?|#|$)/i.test(url || '');
+        }
+
         function normalizeLibraryItems(items, fallbackLabel = 'Media') {
             if (!Array.isArray(items)) return [];
             return items
@@ -787,6 +841,10 @@
                 variants.add(candidate);
             });
 
+            if (!hasTrailingSlash) {
+                variants.add(`${trimmed}/`);
+            }
+
             return Array.from(variants);
         }
 
@@ -795,6 +853,7 @@
             const doc = parser.parseFromString(rawHtml, 'text/html');
             const links = Array.from(doc.querySelectorAll('a[href]'));
             const mediaPattern = /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)$/i;
+            const resolvedBasePath = ensureDirectoryBaseUrl(basePath);
             const files = [];
             const directories = [];
 
@@ -802,9 +861,9 @@
                 const href = link.getAttribute('href');
                 if (!href || href.startsWith('?') || href.startsWith('#') || href.startsWith('../')) return;
 
-                const absolute = new URL(href, basePath);
+                const absolute = new URL(href, resolvedBasePath);
                 const pathname = absolute.pathname || '';
-                const basePathname = new URL(basePath).pathname;
+                const basePathname = new URL(resolvedBasePath).pathname;
                 const fileName = pathname.split('/').filter(Boolean).pop() || '';
                 const looksLikeDirectory = href.endsWith('/') || (!fileName.includes('.') && !mediaPattern.test(pathname));
 
