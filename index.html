@@ -447,6 +447,7 @@
         const npCurrentTime = document.getElementById('npCurrentTime');
         const npDuration = document.getElementById('npDuration');
         let pendingSeekRatio = null;
+        let deferredSeekTime = null;
 
         function formatPlaybackTime(totalSeconds) {
             const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
@@ -491,26 +492,6 @@
             npDuration.innerText = formatPlaybackTime(duration);
         }
 
-        function getSeekableRange() {
-            if (!appAudio.seekable || appAudio.seekable.length === 0) {
-                return null;
-            }
-
-            const currentTime = Number.isFinite(appAudio.currentTime) ? appAudio.currentTime : 0;
-            for (let i = 0; i < appAudio.seekable.length; i += 1) {
-                const rangeStart = appAudio.seekable.start(i);
-                const rangeEnd = appAudio.seekable.end(i);
-                if (currentTime >= rangeStart && currentTime <= rangeEnd) {
-                    return { start: rangeStart, end: rangeEnd };
-                }
-            }
-
-            return {
-                start: appAudio.seekable.start(0),
-                end: appAudio.seekable.end(appAudio.seekable.length - 1)
-            };
-        }
-
         function seekFromBarValue() {
             const isSeekableMedia = isSeekableType(currentMediaType);
             const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
@@ -522,20 +503,50 @@
             return true;
         }
 
+        function setAudioCurrentTime(targetSeconds) {
+            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
+            if (!hasDuration) {
+                deferredSeekTime = targetSeconds;
+                return false;
+            }
+
+            const clampedTarget = Math.min(Math.max(targetSeconds, 0), appAudio.duration);
+            deferredSeekTime = clampedTarget;
+
+            try {
+                if (typeof appAudio.fastSeek === 'function') {
+                    appAudio.fastSeek(clampedTarget);
+                } else {
+                    appAudio.currentTime = clampedTarget;
+                }
+            } catch (error) {
+                // Some browsers can throw while metadata/buffer state catches up; retry on next media event.
+            }
+
+            return true;
+        }
+
+        function flushDeferredSeek() {
+            if (deferredSeekTime === null) return;
+            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
+            if (!hasDuration) return;
+
+            const target = deferredSeekTime;
+            deferredSeekTime = null;
+            try {
+                appAudio.currentTime = target;
+            } catch (error) {
+                deferredSeekTime = target;
+            }
+        }
+
         function commitSeekFromBarValue() {
             const isSeekableMedia = isSeekableType(currentMediaType);
             const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
             if (!isSeekableMedia || !hasDuration) return false;
 
-            let targetSeconds = (pendingSeekRatio !== null ? pendingSeekRatio : Number(npSeekBar.value) / 1000) * appAudio.duration;
-            const seekableRange = getSeekableRange();
-
-            if (seekableRange) {
-                // Keep seeks inside confirmed playable bounds to avoid snapping back to 0 on some servers.
-                targetSeconds = Math.min(Math.max(targetSeconds, seekableRange.start), seekableRange.end);
-            }
-
-            appAudio.currentTime = targetSeconds;
+            const targetSeconds = (pendingSeekRatio !== null ? pendingSeekRatio : Number(npSeekBar.value) / 1000) * appAudio.duration;
+            setAudioCurrentTime(targetSeconds);
             npCurrentTime.innerText = formatPlaybackTime(targetSeconds);
             pendingSeekRatio = null;
             return true;
@@ -619,12 +630,20 @@
             showToast('Could not play this source', 'alert-triangle');
         });
 
-        appAudio.addEventListener('loadedmetadata', updateNowPlayingProgressUI);
-        appAudio.addEventListener('durationchange', updateNowPlayingProgressUI);
+        appAudio.addEventListener('loadedmetadata', () => {
+            flushDeferredSeek();
+            updateNowPlayingProgressUI();
+        });
+        appAudio.addEventListener('durationchange', () => {
+            flushDeferredSeek();
+            updateNowPlayingProgressUI();
+        });
+        appAudio.addEventListener('canplay', flushDeferredSeek);
         appAudio.addEventListener('timeupdate', updateNowPlayingProgressUI);
         appAudio.addEventListener('seeked', () => {
             isSeekDragActive = false;
             pendingSeekRatio = null;
+            deferredSeekTime = null;
             updateNowPlayingProgressUI();
         });
 
@@ -795,6 +814,7 @@
             currentMediaType = '';
             isSeekDragActive = false;
             pendingSeekRatio = null;
+            deferredSeekTime = null;
             albumPlaybackQueue = { tracks: [], currentIndex: -1 };
             updateNowPlayingProgressUI();
             updateMediaSelectionUI();
