@@ -223,6 +223,18 @@
             <button onclick="saveConfig()" class="w-full bg-amber-500 text-slate-900 text-3xl font-bold py-6 rounded-2xl mt-8 shadow-lg tap-target">
                 Save Configuration
             </button>
+
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <label class="block text-2xl font-bold text-amber-400">Diagnostic Logs</label>
+                    <div class="flex gap-3">
+                        <button onclick="refreshLogViewer()" class="tap-target bg-slate-700 text-white text-lg font-bold py-3 px-5 rounded-xl">Refresh</button>
+                        <button onclick="clearLogs()" class="tap-target bg-rose-700 text-white text-lg font-bold py-3 px-5 rounded-xl">Clear</button>
+                    </div>
+                </div>
+                <p class="text-slate-400 text-lg">Recent app events and errors are stored locally to help troubleshoot playback and folder browsing issues.</p>
+                <textarea id="logViewer" readonly class="w-full h-72 bg-slate-900 text-slate-100 text-sm p-4 rounded-2xl border-2 border-slate-700"></textarea>
+            </div>
         </div>
     </div>
 
@@ -261,6 +273,63 @@
             currentPath: '',
             history: []
         };
+        const LOG_STORAGE_KEY = 'simpleMediaLogs';
+        const MAX_LOG_ENTRIES = 200;
+        let appLogs = [];
+
+        function loadLogs() {
+            try {
+                const savedLogs = localStorage.getItem(LOG_STORAGE_KEY);
+                appLogs = savedLogs ? JSON.parse(savedLogs) : [];
+                if (!Array.isArray(appLogs)) appLogs = [];
+            } catch (error) {
+                appLogs = [];
+            }
+        }
+
+        function persistLogs() {
+            localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(appLogs.slice(-MAX_LOG_ENTRIES)));
+        }
+
+        function addLog(level, message, details = '') {
+            const safeLevel = (level || 'INFO').toUpperCase();
+            const entry = {
+                time: new Date().toISOString(),
+                level: safeLevel,
+                message,
+                details: details ? String(details) : ''
+            };
+            appLogs.push(entry);
+            if (appLogs.length > MAX_LOG_ENTRIES) {
+                appLogs = appLogs.slice(-MAX_LOG_ENTRIES);
+            }
+            persistLogs();
+            refreshLogViewer();
+        }
+
+        function formatLogEntry(entry) {
+            const time = new Date(entry.time).toLocaleString();
+            const base = `[${time}] [${entry.level}] ${entry.message}`;
+            return entry.details ? `${base}\n  ${entry.details}` : base;
+        }
+
+        function refreshLogViewer() {
+            const viewer = document.getElementById('logViewer');
+            if (!viewer) return;
+            if (!appLogs.length) {
+                viewer.value = 'No logs yet.';
+                return;
+            }
+            viewer.value = appLogs.slice().reverse().map(formatLogEntry).join('\n\n');
+            viewer.scrollTop = 0;
+        }
+
+        function clearLogs() {
+            appLogs = [];
+            persistLogs();
+            refreshLogViewer();
+            showToast('Logs cleared', 'trash-2');
+        }
 
         // --- Clock Update ---
         function updateClock() {
@@ -379,6 +448,11 @@
         });
 
         async function playMedia(item, type) {
+            if (!item || !item.url) {
+                showToast('This item has no playable file', 'alert-triangle');
+                addLog('warn', `Playback blocked: missing URL for ${type}`, JSON.stringify(item || {}));
+                return;
+            }
             currentMedia = item;
             npTitle.innerText = item.title;
             npType.innerText = "Playing " + type;
@@ -386,8 +460,10 @@
             appAudio.load();
             try {
                 await appAudio.play();
+                addLog('info', `Started playback`, `${type}: ${item.title} (${item.url})`);
             } catch (error) {
                 showToast('Tap again to allow audio playback', 'volume-x');
+                addLog('error', `Playback failed for ${type}: ${item.title}`, error && error.message ? error.message : error);
                 console.error('Playback failed:', error);
             }
 
@@ -617,6 +693,7 @@
                     appConfig = { ...configDefaults, ...JSON.parse(saved) };
                 }
             } catch (error) {
+                addLog('error', 'Could not parse saved config', error && error.message ? error.message : error);
                 console.error('Could not parse saved config', error);
             }
             document.getElementById('radioPath').value = appConfig.radioPath;
@@ -654,6 +731,24 @@
                 .replace(/\.[^.]+$/, '')
                 .replace(/[_-]+/g, ' ')
                 .trim();
+        }
+
+        function normalizeLibraryItems(items, fallbackLabel = 'Media') {
+            if (!Array.isArray(items)) return [];
+            return items
+                .map((item, index) => {
+                    if (!item || typeof item !== 'object') return null;
+                    const rawUrl = item.url || item.src || item.path || item.href || item.file;
+                    if (typeof rawUrl !== 'string' || !rawUrl.trim()) return null;
+                    const fallbackTitle = `Item ${index + 1}`;
+                    return {
+                        ...item,
+                        title: item.title || item.name || item.label || fallbackTitle,
+                        subtitle: item.subtitle || item.type || fallbackLabel,
+                        url: rawUrl.trim()
+                    };
+                })
+                .filter(Boolean);
         }
 
         function resolveConfiguredPath(inputPath) {
@@ -699,29 +794,32 @@
             const parser = new DOMParser();
             const doc = parser.parseFromString(rawHtml, 'text/html');
             const links = Array.from(doc.querySelectorAll('a[href]'));
-            const mediaPattern = /\.(mp3|m4a|aac|ogg|wav|flac)$/i;
+            const mediaPattern = /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)$/i;
             const files = [];
             const directories = [];
 
             links.forEach((link) => {
                 const href = link.getAttribute('href');
-                if (!href || href.startsWith('?') || href.startsWith('#')) return;
+                if (!href || href.startsWith('?') || href.startsWith('#') || href.startsWith('../')) return;
+
                 const absolute = new URL(href, basePath);
                 const pathname = absolute.pathname || '';
-                if (href.endsWith('/')) {
-                    if (pathname !== new URL(basePath).pathname) {
-                        const directoryName = pathname.split('/').filter(Boolean).pop() || 'Folder';
+                const basePathname = new URL(basePath).pathname;
+                const fileName = pathname.split('/').filter(Boolean).pop() || '';
+                const looksLikeDirectory = href.endsWith('/') || (!fileName.includes('.') && !mediaPattern.test(pathname));
+
+                if (looksLikeDirectory) {
+                    if (pathname !== basePathname) {
                         directories.push({
-                            title: humanizeFileName(directoryName),
+                            title: humanizeFileName(fileName || 'Folder'),
                             subtitle: 'Folder',
                             url: absolute.toString()
                         });
                     }
                     return;
                 }
-                if (!mediaPattern.test(pathname)) return;
 
-                const fileName = pathname.split('/').pop();
+                if (!mediaPattern.test(pathname)) return;
                 if (!fileName) return;
 
                 files.push({
@@ -749,7 +847,7 @@
                     const response = await fetch(current.path);
                     if (!response.ok) continue;
                     const contentType = response.headers.get('content-type') || '';
-                    if (!contentType.includes('text/html')) continue;
+                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) continue;
 
                     const html = await response.text();
                     const { files, directories } = parseDirectoryListing(html, response.url, mediaTypeLabel);
@@ -763,6 +861,7 @@
                         });
                     }
                 } catch (error) {
+                    addLog('warn', `Could not scan directory`, `${current.path} :: ${error && error.message ? error.message : error}`);
                     console.warn(`Could not scan directory "${current.path}"`, error);
                 }
             }
@@ -807,6 +906,7 @@
                 }
                 return fallbackData;
             } catch (error) {
+                addLog('warn', `Using fallback media`, `${path} :: ${error && error.message ? error.message : error}`);
                 console.warn(`Using fallback media for "${path}"`, error);
                 return fallbackData;
             }
@@ -927,7 +1027,7 @@
                     const response = await fetch(candidatePath);
                     if (!response.ok) continue;
                     const contentType = response.headers.get('content-type') || '';
-                    if (!contentType.includes('text/html')) continue;
+                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) continue;
                     const html = await response.text();
                     const listing = parseDirectoryListing(html, response.url, 'Track');
                     const albums = [
@@ -945,15 +1045,19 @@
                     });
                     return true;
                 } catch (error) {
+                    addLog('warn', `Could not open music folder`, `${candidatePath} :: ${error && error.message ? error.message : error}`);
                     console.warn(`Could not open music folder "${candidatePath}"`, error);
                 }
             }
+            addLog('warn', 'Music folder could not be opened', path);
             return false;
         }
 
         async function loadLibraries() {
-            const radio = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
-            const books = await fetchLibrary(appConfig.booksPath, defaultLibrary.books, { scanDirectory: true, mediaTypeLabel: 'Audiobook' });
+            const radioRaw = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
+            const booksRaw = await fetchLibrary(appConfig.booksPath, defaultLibrary.books, { scanDirectory: true, mediaTypeLabel: 'Audiobook' });
+            const radio = normalizeLibraryItems(radioRaw, 'Radio');
+            const books = normalizeLibraryItems(booksRaw, 'Audiobook');
             renderRadio(radio);
             renderBookList(books);
             musicBrowseState = { rootPath: appConfig.musicPath, currentPath: '', history: [] };
@@ -966,6 +1070,7 @@
         function openConfig() {
             configScreen.classList.remove('hidden');
             configScreen.classList.add('flex');
+            refreshLogViewer();
             lucide.createIcons(); // ensure overlay icons render
         }
 
@@ -986,6 +1091,8 @@
         }
 
         loadConfig();
+        loadLogs();
+        addLog('info', 'App initialized');
         loadLibraries();
 
     </script>
