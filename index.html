@@ -487,14 +487,41 @@
             npDuration.innerText = formatPlaybackTime(duration);
         }
 
+        function getSeekableRange() {
+            if (!appAudio.seekable || appAudio.seekable.length === 0) {
+                return null;
+            }
+
+            const currentTime = Number.isFinite(appAudio.currentTime) ? appAudio.currentTime : 0;
+            for (let i = 0; i < appAudio.seekable.length; i += 1) {
+                const rangeStart = appAudio.seekable.start(i);
+                const rangeEnd = appAudio.seekable.end(i);
+                if (currentTime >= rangeStart && currentTime <= rangeEnd) {
+                    return { start: rangeStart, end: rangeEnd };
+                }
+            }
+
+            return {
+                start: appAudio.seekable.start(0),
+                end: appAudio.seekable.end(appAudio.seekable.length - 1)
+            };
+        }
+
         function seekFromBarValue() {
             const isSeekableMedia = isSeekableType(currentMediaType);
             const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
             if (!isSeekableMedia || !hasDuration) return false;
-            const seekRatio = Number(npSeekBar.value) / 1000;
-            const previewSeconds = seekRatio * appAudio.duration;
+            const seekRatio = Math.min(Math.max(Number(npSeekBar.value) / 1000, 0), 1);
+            let previewSeconds = seekRatio * appAudio.duration;
+            const seekableRange = getSeekableRange();
+
+            if (seekableRange) {
+                // Keep seeks inside confirmed playable bounds to avoid snapping back to 0 on some servers.
+                previewSeconds = Math.min(Math.max(previewSeconds, seekableRange.start), seekableRange.end);
+            }
+
             appAudio.currentTime = previewSeconds;
-            npCurrentTime.innerText = formatPlaybackTime(previewSeconds);
+            npCurrentTime.innerText = formatPlaybackTime(appAudio.currentTime || previewSeconds);
             return true;
         }
 
@@ -515,7 +542,6 @@
             stopSeekEventPropagation(event);
             isSeekDragActive = true;
             activeSeekPointerId = event.pointerId;
-            npSeekBar.setPointerCapture(event.pointerId);
             seekFromPointerPosition(event);
         });
 
@@ -555,6 +581,13 @@
             activeSeekPointerId = null;
             updateNowPlayingProgressUI();
         });
+
+        document.addEventListener('pointerup', () => {
+            if (!isSeekDragActive) return;
+            isSeekDragActive = false;
+            activeSeekPointerId = null;
+            updateNowPlayingProgressUI();
+        }, { passive: true });
 
         npSeekBar.addEventListener('touchstart', stopSeekEventPropagation, { passive: true });
         npSeekBar.addEventListener('touchmove', stopSeekEventPropagation, { passive: true });
