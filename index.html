@@ -250,6 +250,7 @@
         let sleepTimer = 0; // minutes
         let sleepTimeoutId = null;
         let currentMedia = null;
+        let currentMediaKey = '';
         const titles = ["Internet Radio", "Audio Books", "Music Albums", "Rest & Settings"];
         const appAudio = new Audio();
         appAudio.preload = 'none';
@@ -428,24 +429,58 @@
         appAudio.addEventListener('play', () => {
             isPlaying = true;
             updatePlayIcon();
+            updateMediaSelectionUI();
         });
 
         appAudio.addEventListener('pause', () => {
             isPlaying = false;
             updatePlayIcon();
+            updateMediaSelectionUI();
         });
 
         appAudio.addEventListener('ended', () => {
             isPlaying = false;
             updatePlayIcon();
+            updateMediaSelectionUI();
             showToast('Playback ended', 'music');
         });
 
         appAudio.addEventListener('error', () => {
             isPlaying = false;
             updatePlayIcon();
+            updateMediaSelectionUI();
             showToast('Could not play this source', 'alert-triangle');
         });
+
+        function makeMediaKey(item, type) {
+            return `${type}:${item && item.url ? item.url : ''}`;
+        }
+
+        function updateMediaSelectionUI() {
+            const mediaCards = document.querySelectorAll('[data-media-key]');
+            mediaCards.forEach((card) => {
+                card.classList.remove('border-amber-400', 'bg-slate-700');
+                card.classList.add('border-transparent', 'bg-slate-800');
+                const badge = card.querySelector('.media-state-badge');
+                if (badge) badge.remove();
+            });
+
+            if (!currentMediaKey) return;
+            const activeCard = document.querySelector(`[data-media-key="${CSS.escape(currentMediaKey)}"]`);
+            if (!activeCard) return;
+
+            activeCard.classList.remove('border-transparent');
+            activeCard.classList.add('border-amber-400', 'bg-slate-700');
+
+            const badge = document.createElement('div');
+            badge.className = 'media-state-badge mt-2 text-lg font-bold text-amber-300 flex items-center gap-2';
+            badge.innerHTML = `
+                <i data-lucide="${isPlaying ? 'pause-circle' : 'play-circle'}" class="w-5 h-5"></i>
+                <span>${isPlaying ? 'Playing (tap to pause)' : 'Paused (tap to play)'}</span>
+            `;
+            activeCard.appendChild(badge);
+            lucide.createIcons();
+        }
 
         async function resolvePlayableMedia(item, type) {
             if (!item || !item.url) return null;
@@ -478,7 +513,7 @@
             return item;
         }
 
-        async function playMedia(item, type) {
+        async function playMedia(item, type, mediaKey = '') {
             if (!item || !item.url) {
                 showToast('This item has no playable file', 'alert-triangle');
                 addLog('warn', `Playback blocked: missing URL for ${type}`, JSON.stringify(item || {}));
@@ -492,6 +527,7 @@
             }
 
             currentMedia = playableItem;
+            currentMediaKey = mediaKey || makeMediaKey(item, type);
             npTitle.innerText = item.title;
             npType.innerText = "Playing " + type;
             appAudio.src = playableItem.url;
@@ -505,8 +541,7 @@
                 console.error('Playback failed:', error);
             }
 
-            nowPlayingBar.classList.remove('hidden');
-            setTimeout(() => nowPlayingBar.classList.remove('translate-y-full'), 10);
+            updateMediaSelectionUI();
         }
 
         function togglePlay() {
@@ -538,6 +573,8 @@
             appAudio.removeAttribute('src');
             appAudio.load();
             currentMedia = null;
+            currentMediaKey = '';
+            updateMediaSelectionUI();
             nowPlayingBar.classList.add('translate-y-full');
             setTimeout(() => {
                 nowPlayingBar.classList.add('hidden');
@@ -987,14 +1024,23 @@
                 const initials = station.title.split(' ').map(word => word[0]).join('').slice(0, 3);
                 const colorClasses = ['bg-blue-600', 'bg-emerald-600', 'bg-purple-600', 'bg-red-600'];
                 const card = document.createElement('button');
+                const mediaKey = makeMediaKey(station, 'Radio');
                 card.className = 'tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400';
+                card.dataset.mediaKey = mediaKey;
                 card.innerHTML = `
                     <div class="w-24 h-24 rounded-full ${colorClasses[index % colorClasses.length]} flex items-center justify-center text-3xl font-bold">${initials}</div>
                     <span class="text-3xl font-semibold text-center mt-2">${station.title}</span>
                 `;
-                card.addEventListener('click', () => playMedia(station, 'Radio'));
+                card.addEventListener('click', () => {
+                    if (currentMediaKey === mediaKey) {
+                        togglePlay();
+                        return;
+                    }
+                    playMedia(station, 'Radio', mediaKey);
+                });
                 radioGrid.appendChild(card);
             });
+            updateMediaSelectionUI();
             lucide.createIcons();
         }
 
@@ -1013,7 +1059,9 @@
             books.forEach((book, index) => {
                 const colors = ['bg-amber-700', 'bg-blue-900', 'bg-violet-800', 'bg-teal-800'];
                 const card = document.createElement('button');
-                card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex items-center gap-6 text-left w-full';
+                const mediaKey = makeMediaKey(book, 'Audiobook');
+                card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex items-center gap-6 text-left w-full border-4 border-transparent';
+                card.dataset.mediaKey = mediaKey;
                 card.innerHTML = `
                     <div class="w-28 h-36 ${colors[index % colors.length]} rounded-xl flex-shrink-0 shadow-lg"></div>
                     <div class="flex flex-col justify-center">
@@ -1021,9 +1069,16 @@
                         <span class="text-2xl text-slate-400">${book.subtitle || 'Audiobook'}</span>
                     </div>
                 `;
-                card.addEventListener('click', () => playMedia(book, 'Audiobook'));
+                card.addEventListener('click', () => {
+                    if (currentMediaKey === mediaKey) {
+                        togglePlay();
+                        return;
+                    }
+                    playMedia(book, 'Audiobook', mediaKey);
+                });
                 booksList.appendChild(card);
             });
+            updateMediaSelectionUI();
         }
 
         function renderMusicGrid(albums, options = {}) {
@@ -1056,7 +1111,7 @@
 
             albums.forEach((album, index) => {
                 const card = document.createElement('button');
-                card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center';
+                card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center border-4 border-transparent';
                 if (album.kind === 'directory') {
                     card.innerHTML = `
                         <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center">
@@ -1067,15 +1122,24 @@
                     `;
                     card.addEventListener('click', () => openMusicFolder(album.url, true));
                 } else {
+                    const mediaKey = makeMediaKey(album, 'Album');
+                    card.dataset.mediaKey = mediaKey;
                     card.innerHTML = `
                         <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center text-5xl font-black text-amber-300">${index + 1}</div>
                         <span class="text-3xl font-bold mt-2">${album.title}</span>
                         <span class="text-xl text-slate-400">${album.subtitle || 'Album'}</span>
                     `;
-                    card.addEventListener('click', () => playMedia(album, 'Album'));
+                    card.addEventListener('click', () => {
+                        if (currentMediaKey === mediaKey) {
+                            togglePlay();
+                            return;
+                        }
+                        playMedia(album, 'Album', mediaKey);
+                    });
                 }
                 musicGrid.appendChild(card);
             });
+            updateMediaSelectionUI();
             lucide.createIcons();
         }
 
