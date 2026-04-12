@@ -446,7 +446,7 @@
         const npSeekBar = document.getElementById('npSeekBar');
         const npCurrentTime = document.getElementById('npCurrentTime');
         const npDuration = document.getElementById('npDuration');
-        let activeSeekPointerId = null;
+        let pendingSeekRatio = null;
 
         function formatPlaybackTime(totalSeconds) {
             const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
@@ -478,12 +478,16 @@
             const duration = appAudio.duration;
             const currentTime = Math.min(Math.max(appAudio.currentTime || 0, 0), duration);
 
-            if (!isSeekDragActive) {
+            if (!isSeekDragActive || pendingSeekRatio === null) {
                 const ratio = duration ? currentTime / duration : 0;
                 npSeekBar.value = String(Math.round(ratio * 1000));
             }
 
-            npCurrentTime.innerText = formatPlaybackTime(currentTime);
+            const previewTime = (isSeekDragActive && pendingSeekRatio !== null)
+                ? Math.min(Math.max(pendingSeekRatio * duration, 0), duration)
+                : currentTime;
+
+            npCurrentTime.innerText = formatPlaybackTime(previewTime);
             npDuration.innerText = formatPlaybackTime(duration);
         }
 
@@ -512,16 +516,28 @@
             const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
             if (!isSeekableMedia || !hasDuration) return false;
             const seekRatio = Math.min(Math.max(Number(npSeekBar.value) / 1000, 0), 1);
-            let previewSeconds = seekRatio * appAudio.duration;
+            pendingSeekRatio = seekRatio;
+            const previewSeconds = seekRatio * appAudio.duration;
+            npCurrentTime.innerText = formatPlaybackTime(previewSeconds);
+            return true;
+        }
+
+        function commitSeekFromBarValue() {
+            const isSeekableMedia = isSeekableType(currentMediaType);
+            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
+            if (!isSeekableMedia || !hasDuration) return false;
+
+            let targetSeconds = (pendingSeekRatio !== null ? pendingSeekRatio : Number(npSeekBar.value) / 1000) * appAudio.duration;
             const seekableRange = getSeekableRange();
 
             if (seekableRange) {
                 // Keep seeks inside confirmed playable bounds to avoid snapping back to 0 on some servers.
-                previewSeconds = Math.min(Math.max(previewSeconds, seekableRange.start), seekableRange.end);
+                targetSeconds = Math.min(Math.max(targetSeconds, seekableRange.start), seekableRange.end);
             }
 
-            appAudio.currentTime = previewSeconds;
-            npCurrentTime.innerText = formatPlaybackTime(appAudio.currentTime || previewSeconds);
+            appAudio.currentTime = targetSeconds;
+            npCurrentTime.innerText = formatPlaybackTime(targetSeconds);
+            pendingSeekRatio = null;
             return true;
         }
 
@@ -529,63 +545,43 @@
             event.stopPropagation();
         }
 
-        function seekFromPointerPosition(event) {
-            const barRect = npSeekBar.getBoundingClientRect();
-            if (!barRect.width) return false;
-            const clampedX = Math.min(Math.max(event.clientX, barRect.left), barRect.right);
-            const ratio = (clampedX - barRect.left) / barRect.width;
-            npSeekBar.value = String(Math.round(ratio * 1000));
-            return seekFromBarValue();
-        }
-
         npSeekBar.addEventListener('pointerdown', (event) => {
             stopSeekEventPropagation(event);
             isSeekDragActive = true;
-            activeSeekPointerId = event.pointerId;
-            seekFromPointerPosition(event);
-        });
-
-        npSeekBar.addEventListener('pointermove', (event) => {
-            if (!isSeekDragActive || event.pointerId !== activeSeekPointerId) return;
-            stopSeekEventPropagation(event);
-            seekFromPointerPosition(event);
+            pendingSeekRatio = Math.min(Math.max(Number(npSeekBar.value) / 1000, 0), 1);
         });
 
         npSeekBar.addEventListener('input', (event) => {
             stopSeekEventPropagation(event);
-            if (!seekFromBarValue()) return;
+            isSeekDragActive = true;
+            seekFromBarValue();
         });
 
         npSeekBar.addEventListener('change', (event) => {
             stopSeekEventPropagation(event);
-            if (!seekFromBarValue()) {
-                isSeekDragActive = false;
-                activeSeekPointerId = null;
-                return;
-            }
+            commitSeekFromBarValue();
             isSeekDragActive = false;
-            activeSeekPointerId = null;
             updateNowPlayingProgressUI();
         });
 
         npSeekBar.addEventListener('pointerup', (event) => {
             stopSeekEventPropagation(event);
+            if (isSeekDragActive) commitSeekFromBarValue();
             isSeekDragActive = false;
-            activeSeekPointerId = null;
             updateNowPlayingProgressUI();
         });
 
         npSeekBar.addEventListener('pointercancel', (event) => {
             stopSeekEventPropagation(event);
             isSeekDragActive = false;
-            activeSeekPointerId = null;
+            pendingSeekRatio = null;
             updateNowPlayingProgressUI();
         });
 
         document.addEventListener('pointerup', () => {
             if (!isSeekDragActive) return;
+            commitSeekFromBarValue();
             isSeekDragActive = false;
-            activeSeekPointerId = null;
             updateNowPlayingProgressUI();
         }, { passive: true });
 
@@ -628,6 +624,7 @@
         appAudio.addEventListener('timeupdate', updateNowPlayingProgressUI);
         appAudio.addEventListener('seeked', () => {
             isSeekDragActive = false;
+            pendingSeekRatio = null;
             updateNowPlayingProgressUI();
         });
 
@@ -797,6 +794,7 @@
             currentMediaKey = '';
             currentMediaType = '';
             isSeekDragActive = false;
+            pendingSeekRatio = null;
             albumPlaybackQueue = { tracks: [], currentIndex: -1 };
             updateNowPlayingProgressUI();
             updateMediaSelectionUI();
