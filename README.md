@@ -32,10 +32,18 @@ Use the included script (defaults to port `3014`):
 ./deploy.sh
 ```
 
+By default, the deploy script mounts `./media` from your host into the container at `/app/media` (served as `/media/...` in the browser). Put audio files in that host folder so the app can access them.
+
 Or provide custom port and hostname:
 
 ```bash
 ./deploy.sh 8080 localhost
+```
+
+You can also pass a custom host media folder as a third argument:
+
+```bash
+./deploy.sh 8080 localhost /path/to/your/media
 ```
 
 ## Basic controls
