@@ -1176,7 +1176,8 @@
         }
 
         function isLikelyAudioUrl(url) {
-            return /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)(\?|#|$)/i.test(url || '');
+            // Support direct files and common radio stream/playlist formats.
+            return /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac|m3u|m3u8|pls)(\?|#|$)/i.test(url || '');
         }
 
         function normalizeLibraryItems(items, fallbackLabel = 'Media') {
