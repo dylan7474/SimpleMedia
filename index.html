@@ -218,6 +218,17 @@
                 <label class="block text-2xl font-bold text-amber-400">Internet Radio Source (JSON/M3U)</label>
                 <input type="text" id="radioPath" value="/api/radio-stations" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
             </div>
+
+            <div class="space-y-4">
+                <label class="block text-2xl font-bold text-amber-400">Custom Radio Stations</label>
+                <p class="text-slate-400 text-lg">Add direct stream URLs to always show important stations, even if the main source is offline.</p>
+                <div class="grid grid-cols-1 gap-3">
+                    <input type="text" id="customStationName" placeholder="Station Name (example: Local News)" class="w-full bg-slate-800 text-white text-lg p-4 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
+                    <input type="text" id="customStationUrl" placeholder="Stream URL (https://...)" class="w-full bg-slate-800 text-white text-lg p-4 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
+                    <button onclick="addCustomStationFromForm()" class="tap-target bg-blue-600 text-white text-xl font-bold py-4 rounded-2xl">Add Station</button>
+                </div>
+                <div id="customStationsList" class="space-y-3"></div>
+            </div>
             
             <div class="space-y-4">
                 <label class="block text-2xl font-bold text-amber-400">Audio Books Folder Path</label>
@@ -279,6 +290,8 @@
             musicPath: 'Music'
         };
         let appConfig = { ...configDefaults };
+        const CUSTOM_RADIO_STORAGE_KEY = 'simpleMediaCustomStations';
+        let customRadioStations = [];
         
         let restTapCount = 0;
         let restTapTimer;
@@ -347,6 +360,100 @@
             persistLogs();
             refreshLogViewer();
             showToast('Logs cleared', 'trash-2');
+        }
+
+        function loadCustomRadioStations() {
+            try {
+                const savedStations = localStorage.getItem(CUSTOM_RADIO_STORAGE_KEY);
+                const parsedStations = savedStations ? JSON.parse(savedStations) : [];
+                if (!Array.isArray(parsedStations)) {
+                    customRadioStations = [];
+                    return;
+                }
+                customRadioStations = parsedStations
+                    .map((station) => ({
+                        title: (station && station.title ? String(station.title) : '').trim(),
+                        url: (station && station.url ? String(station.url) : '').trim()
+                    }))
+                    .filter((station) => station.title && station.url);
+            } catch (error) {
+                customRadioStations = [];
+                addLog('warn', 'Could not parse custom radio stations', error && error.message ? error.message : error);
+            }
+        }
+
+        function persistCustomRadioStations() {
+            localStorage.setItem(CUSTOM_RADIO_STORAGE_KEY, JSON.stringify(customRadioStations));
+        }
+
+        function renderCustomStationsEditor() {
+            const list = document.getElementById('customStationsList');
+            if (!list) return;
+            list.innerHTML = '';
+
+            if (customRadioStations.length === 0) {
+                list.innerHTML = `
+                    <div class="bg-slate-900 rounded-2xl p-4 text-slate-400 text-base border border-slate-700">
+                        No custom stations yet. Add one below.
+                    </div>
+                `;
+                return;
+            }
+
+            customRadioStations.forEach((station, index) => {
+                const row = document.createElement('div');
+                row.className = 'bg-slate-900 rounded-2xl border border-slate-700 p-4 space-y-3';
+                row.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div class="text-slate-300 text-lg font-semibold truncate pr-4">${station.title}</div>
+                        <button data-remove-index="${index}" class="tap-target bg-rose-700 text-white text-sm font-bold py-2 px-4 rounded-xl">Remove</button>
+                    </div>
+                    <div class="text-slate-400 text-sm break-all">${station.url}</div>
+                `;
+                list.appendChild(row);
+            });
+
+            list.querySelectorAll('[data-remove-index]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const removeIndex = Number(button.getAttribute('data-remove-index'));
+                    if (Number.isNaN(removeIndex)) return;
+                    customRadioStations.splice(removeIndex, 1);
+                    persistCustomRadioStations();
+                    renderCustomStationsEditor();
+                    loadLibraries();
+                    showToast('Station removed', 'trash-2');
+                });
+            });
+        }
+
+        function addCustomStationFromForm() {
+            const nameInput = document.getElementById('customStationName');
+            const urlInput = document.getElementById('customStationUrl');
+            if (!nameInput || !urlInput) return;
+
+            const title = nameInput.value.trim();
+            const url = urlInput.value.trim();
+            if (!title || !url) {
+                showToast('Enter station name and URL', 'alert-triangle');
+                return;
+            }
+            if (!/^https?:\/\//i.test(url)) {
+                showToast('Station URL must start with http(s)', 'alert-triangle');
+                return;
+            }
+            const duplicate = customRadioStations.some((station) => station.url.toLowerCase() === url.toLowerCase());
+            if (duplicate) {
+                showToast('Station URL already added', 'info');
+                return;
+            }
+
+            customRadioStations.push({ title, url });
+            persistCustomRadioStations();
+            renderCustomStationsEditor();
+            loadLibraries();
+            nameInput.value = '';
+            urlInput.value = '';
+            showToast('Station added', 'check-circle');
         }
 
         // --- Clock Update ---
@@ -1435,7 +1542,15 @@
         async function loadLibraries() {
             const radioRaw = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
             const booksRaw = await fetchLibrary(appConfig.booksPath, defaultLibrary.books, { scanDirectory: true, mediaTypeLabel: 'Audiobook' });
-            const radio = normalizeLibraryItems(radioRaw, 'Radio');
+            const remoteRadio = normalizeLibraryItems(radioRaw, 'Radio');
+            const localRadio = normalizeLibraryItems(customRadioStations, 'Radio');
+            const radioSeen = new Set();
+            const radio = [...localRadio, ...remoteRadio].filter((station) => {
+                const key = (station.url || '').toLowerCase();
+                if (!key || radioSeen.has(key)) return false;
+                radioSeen.add(key);
+                return true;
+            });
             const books = normalizeLibraryItems(booksRaw, 'Audiobook');
             renderRadio(radio);
             renderBookList(books);
@@ -1450,6 +1565,7 @@
             configScreen.classList.remove('hidden');
             configScreen.classList.add('flex');
             refreshLogViewer();
+            renderCustomStationsEditor();
             lucide.createIcons(); // ensure overlay icons render
         }
 
@@ -1471,6 +1587,7 @@
 
         loadConfig();
         loadLogs();
+        loadCustomRadioStations();
         addLog('info', 'App initialized');
         loadLibraries();
 
