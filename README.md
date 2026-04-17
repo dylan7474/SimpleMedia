@@ -89,36 +89,12 @@ Result:
 - The Music tab reads media from `/Music`.
 - You do **not** need to set or manage a separate media root in the app.
 
-## Troubleshooting media library detection
-
-If Books or Music suddenly show no items and the log shows warnings like:
-
-- `Music folder could not be opened`
-- `Audiobook library could not be opened`
-
-check the following:
-
-1. **Container mount path is correct**
-   - Re-run deploy with an explicit absolute path:
-     ```bash
-     ./deploy.sh /absolute/path/to/Media
-     ```
-2. **Top-level folder names exist in that host folder**
-   - Expected defaults are:
-     - `Music` → available in app as `/Music`
-     - `AudioBooks` → available in app as `/AudioBooks`
-3. **You accepted the HTTPS certificate warning for the exact host**
-   - If you open by LAN IP, accept cert warning on that URL too.
-4. **Config paths are simple folder names**
-   - Use `Music` and `AudioBooks` (no filesystem absolute paths in the app config screen).
-
 ## Basic controls
 
 - **Bottom tabs**: switch between **Radio**, **Books**, **Music**, and **Rest**.
 - **Tap media cards**: start playback for a station/book/album.
 - **Now Playing bar**: pause/resume, view current title, and close the player strip.
 - **Hidden config screen**: tap the **Rest** tab 3 times quickly, then set Radio/Books/Music source paths. Saved values are persisted in browser storage and immediately used to load media libraries.
-  - In that screen, you can also add/edit/remove **Custom Radio Stations** (name + stream URL). When at least one custom station is saved, the Radio tab uses that local list instead of the configured radio source path.
 - **Rest tab**:
   - Set **Sleep Timer** (15/30/60 minutes or Off).
   - Toggle **Background Noise** and choose White/Pink/Blue noise.
