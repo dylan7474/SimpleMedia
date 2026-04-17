@@ -790,7 +790,7 @@
 
         async function resolvePlayableMedia(item, type) {
             if (!item || !item.url) return null;
-            if (isLikelyAudioUrl(item.url)) return item;
+            if (canPlayDirectUrl(item.url, type)) return item;
 
             try {
                 const candidatePaths = getPathVariants(item.url);
@@ -829,7 +829,7 @@
                 albumPlaybackQueue = { tracks: [], currentIndex: -1 };
             }
             const playableItem = await resolvePlayableMedia(item, type);
-            if (!playableItem || !playableItem.url || !isLikelyAudioUrl(playableItem.url)) {
+            if (!playableItem || !playableItem.url || !canPlayDirectUrl(playableItem.url, type)) {
                 showToast('No playable audio file found', 'alert-triangle');
                 addLog('error', `Playback failed for ${type}: ${item.title}`, 'Could not locate a supported audio file.');
                 return;
@@ -1178,6 +1178,18 @@
         function isLikelyAudioUrl(url) {
             // Support direct files and common radio stream/playlist formats.
             return /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac|m3u|m3u8|pls)(\?|#|$)/i.test(url || '');
+        }
+
+        function canPlayDirectUrl(url, mediaType = '') {
+            if (!url || typeof url !== 'string') return false;
+            if (isLikelyAudioUrl(url)) return true;
+
+            // Some live radio endpoints expose audio at extensionless URLs, e.g. /rock-192.
+            if (mediaType === 'Radio' && /^https?:\/\//i.test(url)) {
+                return !/\.(html?|php|asp|aspx|jsp)(\?|#|$)/i.test(url);
+            }
+
+            return false;
         }
 
         function normalizeLibraryItems(items, fallbackLabel = 'Media') {
