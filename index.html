@@ -695,7 +695,8 @@
 
         async function resolvePlayableMedia(item, type) {
             if (!item || !item.url) return null;
-            if (isLikelyAudioUrl(item.url)) return item;
+            const canUseDirectStreamUrl = type === 'Radio' && isLikelyAudioUrl(item.url, { allowHttpStream: true });
+            if (isLikelyAudioUrl(item.url) || canUseDirectStreamUrl) return item;
 
             try {
                 const candidatePaths = getPathVariants(item.url);
@@ -734,23 +735,32 @@
                 albumPlaybackQueue = { tracks: [], currentIndex: -1 };
             }
             const playableItem = await resolvePlayableMedia(item, type);
-            if (!playableItem || !playableItem.url || !isLikelyAudioUrl(playableItem.url)) {
+            const allowHttpStream = type === 'Radio';
+            if (!playableItem || !playableItem.url || !isLikelyAudioUrl(playableItem.url, { allowHttpStream })) {
                 showToast('No playable audio file found', 'alert-triangle');
                 addLog('error', `Playback failed for ${type}: ${item.title}`, 'Could not locate a supported audio file.');
                 return;
             }
 
-            currentMedia = playableItem;
+            let selectedPlayableItem = playableItem;
+            if (type === 'Radio' && window.location.protocol === 'https:' && /^http:\/\//i.test(playableItem.url)) {
+                selectedPlayableItem = {
+                    ...playableItem,
+                    url: playableItem.url.replace(/^http:\/\//i, 'https://')
+                };
+            }
+
+            currentMedia = selectedPlayableItem;
             currentMediaKey = mediaKey || makeMediaKey(item, type);
             currentMediaType = type;
             npTitle.innerText = item.title;
             npType.innerText = "Playing " + type;
-            appAudio.src = playableItem.url;
+            appAudio.src = selectedPlayableItem.url;
             appAudio.load();
             updateNowPlayingProgressUI();
             try {
                 await appAudio.play();
-                addLog('info', `Started playback`, `${type}: ${item.title} (${playableItem.url})`);
+                addLog('info', `Started playback`, `${type}: ${item.title} (${selectedPlayableItem.url})`);
             } catch (error) {
                 showToast('Tap again to allow audio playback', 'volume-x');
                 addLog('error', `Playback failed for ${type}: ${item.title}`, error && error.message ? error.message : error);
@@ -1172,8 +1182,20 @@
             }
         }
 
-        function isLikelyAudioUrl(url) {
-            return /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)(\?|#|$)/i.test(url || '');
+        function isLikelyAudioUrl(url, options = {}) {
+            const { allowHttpStream = false } = options;
+            const normalizedUrl = (url || '').trim();
+            if (!normalizedUrl) return false;
+
+            if (/\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)(\?|#|$)/i.test(normalizedUrl)) {
+                return true;
+            }
+
+            if (allowHttpStream && /^https?:\/\//i.test(normalizedUrl)) {
+                return true;
+            }
+
+            return false;
         }
 
         function normalizeLibraryItems(items, fallbackLabel = 'Media') {
