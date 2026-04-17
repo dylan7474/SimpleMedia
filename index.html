@@ -217,16 +217,6 @@
             <div class="space-y-4">
                 <label class="block text-2xl font-bold text-amber-400">Internet Radio Source (JSON/M3U)</label>
                 <input type="text" id="radioPath" value="/api/radio-stations" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
-                <p class="text-slate-400 text-lg">Used only when no custom stations are saved below.</p>
-            </div>
-
-            <div class="space-y-4">
-                <div class="flex justify-between items-center gap-4">
-                    <label class="block text-2xl font-bold text-amber-400">Custom Radio Stations</label>
-                    <button type="button" onclick="addRadioStationEditorRow()" class="tap-target bg-slate-700 text-white text-lg font-bold py-3 px-5 rounded-xl">Add Station</button>
-                </div>
-                <p class="text-slate-400 text-lg">Add station name and stream URL. If stations are listed here, they are used instead of the source path above.</p>
-                <div id="radioStationEditorList" class="space-y-4"></div>
             </div>
             
             <div class="space-y-4">
@@ -283,14 +273,12 @@
             books: [],
             music: []
         };
-        const RADIO_STATIONS_STORAGE_KEY = 'simpleMediaRadioStations';
         const configDefaults = {
             radioPath: '/api/radio-stations',
             booksPath: 'AudioBooks',
             musicPath: 'Music'
         };
         let appConfig = { ...configDefaults };
-        let customRadioStations = [];
         
         let restTapCount = 0;
         let restTapTimer;
@@ -695,8 +683,7 @@
 
         async function resolvePlayableMedia(item, type) {
             if (!item || !item.url) return null;
-            const canUseDirectStreamUrl = type === 'Radio' && isLikelyAudioUrl(item.url, { allowHttpStream: true });
-            if (isLikelyAudioUrl(item.url) || canUseDirectStreamUrl) return item;
+            if (isLikelyAudioUrl(item.url)) return item;
 
             try {
                 const candidatePaths = getPathVariants(item.url);
@@ -735,32 +722,23 @@
                 albumPlaybackQueue = { tracks: [], currentIndex: -1 };
             }
             const playableItem = await resolvePlayableMedia(item, type);
-            const allowHttpStream = type === 'Radio';
-            if (!playableItem || !playableItem.url || !isLikelyAudioUrl(playableItem.url, { allowHttpStream })) {
+            if (!playableItem || !playableItem.url || !isLikelyAudioUrl(playableItem.url)) {
                 showToast('No playable audio file found', 'alert-triangle');
                 addLog('error', `Playback failed for ${type}: ${item.title}`, 'Could not locate a supported audio file.');
                 return;
             }
 
-            let selectedPlayableItem = playableItem;
-            if (type === 'Radio' && window.location.protocol === 'https:' && /^http:\/\//i.test(playableItem.url)) {
-                selectedPlayableItem = {
-                    ...playableItem,
-                    url: playableItem.url.replace(/^http:\/\//i, 'https://')
-                };
-            }
-
-            currentMedia = selectedPlayableItem;
+            currentMedia = playableItem;
             currentMediaKey = mediaKey || makeMediaKey(item, type);
             currentMediaType = type;
             npTitle.innerText = item.title;
             npType.innerText = "Playing " + type;
-            appAudio.src = selectedPlayableItem.url;
+            appAudio.src = playableItem.url;
             appAudio.load();
             updateNowPlayingProgressUI();
             try {
                 await appAudio.play();
-                addLog('info', `Started playback`, `${type}: ${item.title} (${selectedPlayableItem.url})`);
+                addLog('info', `Started playback`, `${type}: ${item.title} (${playableItem.url})`);
             } catch (error) {
                 showToast('Tap again to allow audio playback', 'volume-x');
                 addLog('error', `Playback failed for ${type}: ${item.title}`, error && error.message ? error.message : error);
@@ -1044,98 +1022,6 @@
             document.getElementById('radioPath').value = appConfig.radioPath;
             document.getElementById('booksPath').value = appConfig.booksPath;
             document.getElementById('musicPath').value = appConfig.musicPath;
-            loadCustomRadioStations();
-            renderRadioStationEditor();
-        }
-
-        function normalizeCustomRadioStations(rawStations) {
-            if (!Array.isArray(rawStations)) return [];
-            return rawStations
-                .map((station) => {
-                    if (!station || typeof station !== 'object') return null;
-                    const title = String(station.title || '').trim();
-                    const url = String(station.url || '').trim();
-                    if (!title || !url) return null;
-                    return {
-                        title,
-                        url,
-                        subtitle: station.subtitle || 'Radio'
-                    };
-                })
-                .filter(Boolean);
-        }
-
-        function loadCustomRadioStations() {
-            try {
-                const savedStations = localStorage.getItem(RADIO_STATIONS_STORAGE_KEY);
-                customRadioStations = savedStations ? normalizeCustomRadioStations(JSON.parse(savedStations)) : [];
-            } catch (error) {
-                customRadioStations = [];
-                addLog('warn', 'Could not parse custom radio stations', error && error.message ? error.message : error);
-            }
-        }
-
-        function createRadioStationRow(station = {}) {
-            const row = document.createElement('div');
-            row.className = 'bg-slate-900 border border-slate-700 rounded-2xl p-4 space-y-3';
-            row.innerHTML = `
-                <div class="space-y-2">
-                    <label class="block text-base font-semibold text-slate-300">Station name</label>
-                    <input type="text" value="${station.title || ''}" placeholder="Example: Jazz FM" class="radio-station-title w-full bg-slate-800 text-white text-lg p-4 rounded-xl border border-slate-700 focus:border-amber-400 outline-none">
-                </div>
-                <div class="space-y-2">
-                    <label class="block text-base font-semibold text-slate-300">Stream URL</label>
-                    <input type="text" value="${station.url || ''}" placeholder="https://stream.example.com/live.mp3" class="radio-station-url w-full bg-slate-800 text-white text-lg p-4 rounded-xl border border-slate-700 focus:border-amber-400 outline-none">
-                </div>
-            `;
-            const removeButton = document.createElement('button');
-            removeButton.type = 'button';
-            removeButton.className = 'tap-target bg-rose-700 text-white text-base font-bold py-3 px-4 rounded-xl';
-            removeButton.innerText = 'Remove station';
-            removeButton.addEventListener('click', () => row.remove());
-            row.appendChild(removeButton);
-            return row;
-        }
-
-        function renderRadioStationEditor() {
-            const list = document.getElementById('radioStationEditorList');
-            if (!list) return;
-            list.innerHTML = '';
-            if (customRadioStations.length === 0) {
-                const emptyState = document.createElement('div');
-                emptyState.className = 'bg-slate-900 border border-slate-700 rounded-2xl p-6 text-slate-400 text-lg';
-                emptyState.innerText = 'No custom stations yet. Tap "Add Station" to create one.';
-                list.appendChild(emptyState);
-                return;
-            }
-            customRadioStations.forEach(station => {
-                list.appendChild(createRadioStationRow(station));
-            });
-        }
-
-        function addRadioStationEditorRow() {
-            const list = document.getElementById('radioStationEditorList');
-            if (!list) return;
-            const hasEmptyState = list.children.length === 1 && list.firstElementChild && list.firstElementChild.innerText.includes('No custom stations yet');
-            if (hasEmptyState) {
-                list.innerHTML = '';
-            }
-            list.appendChild(createRadioStationRow());
-        }
-
-        function collectCustomRadioStationsFromEditor() {
-            const rows = Array.from(document.querySelectorAll('#radioStationEditorList > div'));
-            const stations = rows
-                .map((row) => {
-                    const titleInput = row.querySelector('.radio-station-title');
-                    const urlInput = row.querySelector('.radio-station-url');
-                    const title = titleInput ? titleInput.value.trim() : '';
-                    const url = urlInput ? urlInput.value.trim() : '';
-                    if (!title || !url) return null;
-                    return { title, url, subtitle: 'Radio' };
-                })
-                .filter(Boolean);
-            return normalizeCustomRadioStations(stations);
         }
 
         function normalizeLibraryData(raw) {
@@ -1182,20 +1068,8 @@
             }
         }
 
-        function isLikelyAudioUrl(url, options = {}) {
-            const { allowHttpStream = false } = options;
-            const normalizedUrl = (url || '').trim();
-            if (!normalizedUrl) return false;
-
-            if (/\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)(\?|#|$)/i.test(normalizedUrl)) {
-                return true;
-            }
-
-            if (allowHttpStream && /^https?:\/\//i.test(normalizedUrl)) {
-                return true;
-            }
-
-            return false;
+        function isLikelyAudioUrl(url) {
+            return /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)(\?|#|$)/i.test(url || '');
         }
 
         function normalizeLibraryItems(items, fallbackLabel = 'Media') {
@@ -1219,113 +1093,44 @@
         function resolveConfiguredPath(inputPath) {
             const trimmed = (inputPath || '').trim();
             if (!trimmed) return [];
-
-            // Absolute URLs are used as-is.
             if (/^https?:\/\//i.test(trimmed)) return [trimmed];
-
-            const variants = new Set();
-            const withoutLeadingSlash = trimmed.replace(/^\/+/, '');
-            const withSingleLeadingSlash = `/${withoutLeadingSlash}`;
-            const withoutMediaPrefix = withoutLeadingSlash.replace(/^media\/+/i, '');
-
-            const addVariant = (candidate) => {
-                if (!candidate) return;
-                if (/^https?:\/\//i.test(candidate)) {
-                    variants.add(candidate);
-                    return;
-                }
-                const cleaned = candidate
-                    .replace(/\/{2,}/g, '/')
-                    .replace(/\/+$/, '');
-                if (cleaned) {
-                    variants.add(cleaned.startsWith('/') ? cleaned : `/${cleaned}`);
-                }
-            };
-
-            // Try host root path.
-            addVariant(withSingleLeadingSlash);
-            // Also try a `/media` prefix so deployments that expose files below
-            // `/media/*` are reachable without manually changing config paths.
-            addVariant(`/media/${withoutMediaPrefix}`);
-            // Keep relative-style lookups for sub-path hosting compatibility.
-            addVariant(withoutLeadingSlash);
-            addVariant(`media/${withoutMediaPrefix}`);
-
-            try {
-                const currentPath = window.location.pathname || '/';
-                const baseSegments = currentPath.split('/').filter(Boolean);
-                // Drop the document name (index.html) if present.
-                if (baseSegments.length > 0 && /\.[^/]+$/.test(baseSegments[baseSegments.length - 1])) {
-                    baseSegments.pop();
-                }
-                if (baseSegments.length > 0) {
-                    const basePrefix = `/${baseSegments.join('/')}`;
-                    addVariant(`${basePrefix}/${withoutLeadingSlash}`);
-                    addVariant(`${basePrefix}/media/${withoutMediaPrefix}`);
-                }
-            } catch (error) {
-                // no-op: fallback variants above are enough in restricted environments.
-            }
-
-            return Array.from(variants).filter(Boolean);
+            if (trimmed.startsWith('/')) return [trimmed];
+            return [`/${trimmed}`];
         }
 
         function getPathVariants(inputPath) {
             const resolvedPaths = resolveConfiguredPath(inputPath);
             if (resolvedPaths.length === 0) return [];
+            const trimmed = resolvedPaths[0];
+            if (/^https?:\/\//i.test(trimmed)) return [trimmed];
+            const hasTrailingSlash = trimmed.endsWith('/');
+            const rawSegments = trimmed.split('/').filter(Boolean);
+            if (rawSegments.length === 0) return [trimmed];
 
-            const variants = new Set();
-            resolvedPaths.forEach((basePath) => {
-                if (/^https?:\/\//i.test(basePath)) {
-                    variants.add(basePath);
-                    return;
-                }
+            const last = rawSegments[rawSegments.length - 1];
+            const variants = new Set([trimmed]);
+            const alternates = [
+                last.toLowerCase(),
+                last.toUpperCase(),
+                last[0].toUpperCase() + last.slice(1).toLowerCase()
+            ];
 
-                const hasTrailingSlash = basePath.endsWith('/');
-                const rawSegments = basePath.split('/').filter(Boolean);
-                if (rawSegments.length === 0) {
-                    variants.add(basePath);
-                    return;
-                }
+            // Common audiobook casing seen in host media folders.
+            if (last.toLowerCase() === 'audiobooks') {
+                alternates.push('AudioBooks');
+            }
 
-                const last = rawSegments[rawSegments.length - 1];
-                const alternates = [
-                    last.toLowerCase(),
-                    last.toUpperCase(),
-                    last[0].toUpperCase() + last.slice(1).toLowerCase()
-                ];
-
-                // Common audiobook casing seen in host media folders.
-                if (last.toLowerCase() === 'audiobooks') {
-                    alternates.push('AudioBooks');
-                }
-
-                const prefix = basePath.startsWith('/') ? '/' : '';
-                const pushCandidate = (candidateLast) => {
-                    const candidateSegments = [...rawSegments.slice(0, -1), candidateLast];
-                    const candidate = `${prefix}${candidateSegments.join('/')}${hasTrailingSlash ? '/' : ''}`;
-                    variants.add(candidate);
-                };
-
-                pushCandidate(last);
-                alternates.forEach(pushCandidate);
-
-                if (!hasTrailingSlash) {
-                    variants.add(`${prefix}${rawSegments.join('/')}/`);
-                }
+            alternates.forEach((candidateLast) => {
+                const candidateSegments = [...rawSegments.slice(0, -1), candidateLast];
+                const candidate = `/${candidateSegments.join('/')}${hasTrailingSlash ? '/' : ''}`;
+                variants.add(candidate);
             });
 
-            return Array.from(variants);
-        }
+            if (!hasTrailingSlash) {
+                variants.add(`${trimmed}/`);
+            }
 
-        function summarizeFetchFailure(candidatePath, response, error) {
-            if (error) {
-                return `${candidatePath} :: ${error && error.message ? error.message : error}`;
-            }
-            if (response) {
-                return `${candidatePath} :: HTTP ${response.status}`;
-            }
-            return `${candidatePath} :: Unknown failure`;
+            return Array.from(variants);
         }
 
         function parseDirectoryListing(rawHtml, basePath, mediaTypeLabel) {
@@ -1411,48 +1216,37 @@
         async function fetchLibrary(path, fallbackData, options = {}) {
             const { allowM3U = false, scanDirectory = false, mediaTypeLabel = 'Media' } = options;
             const pathCandidates = scanDirectory ? getPathVariants(path) : resolveConfiguredPath(path);
-            const failures = [];
             try {
                 for (const candidatePath of pathCandidates) {
-                    try {
-                        const response = await fetch(candidatePath);
-                        if (!response.ok) {
-                            failures.push(summarizeFetchFailure(candidatePath, response));
-                            continue;
-                        }
-                        const contentType = response.headers.get('content-type') || '';
-                        const body = await response.text();
-                        const looksLikeM3U = contentType.includes('mpegurl')
-                            || contentType.includes('m3u')
-                            || body.trim().startsWith('#EXTM3U')
-                            || candidatePath.toLowerCase().endsWith('.m3u');
-                        if (allowM3U && looksLikeM3U) {
-                            const parsed = parseM3U(body);
-                            if (parsed.length > 0) return parsed;
-                        }
-                        try {
-                            const data = JSON.parse(body);
-                            const normalized = normalizeLibraryData(data);
-                            if (normalized.length) return normalized;
-                        } catch (parseError) {
-                            if (scanDirectory) {
-                                let discoveredItems = [];
-                                if (contentType.includes('text/html')) {
-                                    const listing = parseDirectoryListing(body, response.url, mediaTypeLabel);
-                                    discoveredItems = listing.files;
-                                }
-                                if (discoveredItems.length === 0) {
-                                    discoveredItems = await discoverDirectoryMedia(candidatePath, mediaTypeLabel);
-                                }
-                                if (discoveredItems.length > 0) return discoveredItems;
-                            }
-                        }
-                    } catch (candidateError) {
-                        failures.push(summarizeFetchFailure(candidatePath, null, candidateError));
+                    const response = await fetch(candidatePath);
+                    if (!response.ok) continue;
+                    const contentType = response.headers.get('content-type') || '';
+                    const body = await response.text();
+                    const looksLikeM3U = contentType.includes('mpegurl')
+                        || contentType.includes('m3u')
+                        || body.trim().startsWith('#EXTM3U')
+                        || candidatePath.toLowerCase().endsWith('.m3u');
+                    if (allowM3U && looksLikeM3U) {
+                        const parsed = parseM3U(body);
+                        if (parsed.length > 0) return parsed;
                     }
-                }
-                if (failures.length > 0) {
-                    addLog('warn', `${mediaTypeLabel} library could not be opened`, failures.join(' | '));
+                    try {
+                        const data = JSON.parse(body);
+                        const normalized = normalizeLibraryData(data);
+                        if (normalized.length) return normalized;
+                    } catch (parseError) {
+                        if (scanDirectory) {
+                            let discoveredItems = [];
+                            if (contentType.includes('text/html')) {
+                                const listing = parseDirectoryListing(body, response.url, mediaTypeLabel);
+                                discoveredItems = listing.files;
+                            }
+                            if (discoveredItems.length === 0) {
+                                discoveredItems = await discoverDirectoryMedia(candidatePath, mediaTypeLabel);
+                            }
+                            if (discoveredItems.length > 0) return discoveredItems;
+                        }
+                    }
                 }
                 return fallbackData;
             } catch (error) {
@@ -1607,19 +1401,12 @@
 
         async function openMusicFolder(path, pushHistory = false) {
             const candidatePaths = getPathVariants(path);
-            const failures = [];
             for (const candidatePath of candidatePaths) {
                 try {
                     const response = await fetch(candidatePath);
-                    if (!response.ok) {
-                        failures.push(summarizeFetchFailure(candidatePath, response));
-                        continue;
-                    }
+                    if (!response.ok) continue;
                     const contentType = response.headers.get('content-type') || '';
-                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
-                        failures.push(`${candidatePath} :: Unsupported content-type (${contentType || 'none'})`);
-                        continue;
-                    }
+                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) continue;
                     const html = await response.text();
                     const listing = parseDirectoryListing(html, response.url, 'Track');
                     const albums = [
@@ -1637,21 +1424,16 @@
                     });
                     return true;
                 } catch (error) {
-                    const failure = summarizeFetchFailure(candidatePath, null, error);
-                    failures.push(failure);
-                    addLog('warn', `Could not open music folder`, failure);
+                    addLog('warn', `Could not open music folder`, `${candidatePath} :: ${error && error.message ? error.message : error}`);
                     console.warn(`Could not open music folder "${candidatePath}"`, error);
                 }
             }
-            const details = failures.length > 0 ? failures.join(' | ') : path;
-            addLog('warn', 'Music folder could not be opened', details);
+            addLog('warn', 'Music folder could not be opened', path);
             return false;
         }
 
         async function loadLibraries() {
-            const radioRaw = customRadioStations.length > 0
-                ? customRadioStations
-                : await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
+            const radioRaw = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
             const booksRaw = await fetchLibrary(appConfig.booksPath, defaultLibrary.books, { scanDirectory: true, mediaTypeLabel: 'Audiobook' });
             const radio = normalizeLibraryItems(radioRaw, 'Radio');
             const books = normalizeLibraryItems(booksRaw, 'Audiobook');
@@ -1680,11 +1462,8 @@
             const rPath = document.getElementById('radioPath').value.trim();
             const bPath = document.getElementById('booksPath').value.trim();
             const mPath = document.getElementById('musicPath').value.trim();
-            const editorStations = collectCustomRadioStationsFromEditor();
             appConfig = { radioPath: rPath, booksPath: bPath, musicPath: mPath };
-            customRadioStations = editorStations;
             localStorage.setItem('simpleMediaConfig', JSON.stringify(appConfig));
-            localStorage.setItem(RADIO_STATIONS_STORAGE_KEY, JSON.stringify(customRadioStations));
             loadLibraries();
             showToast("Configuration Saved", 'check-circle');
             closeConfig();
