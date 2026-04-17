@@ -1219,42 +1219,81 @@
         function resolveConfiguredPath(inputPath) {
             const trimmed = (inputPath || '').trim();
             if (!trimmed) return [];
+
+            // Absolute URLs are used as-is.
             if (/^https?:\/\//i.test(trimmed)) return [trimmed];
-            if (trimmed.startsWith('/')) return [trimmed];
-            return [`/${trimmed}`];
+
+            const variants = new Set();
+            const withoutLeadingSlash = trimmed.replace(/^\/+/, '');
+            const withSingleLeadingSlash = `/${withoutLeadingSlash}`;
+
+            // Try host root path.
+            variants.add(withSingleLeadingSlash);
+            // Also try relative to the current app location. This matters when the app
+            // is served from a sub-path instead of the web root.
+            variants.add(withoutLeadingSlash);
+
+            try {
+                const currentPath = window.location.pathname || '/';
+                const baseSegments = currentPath.split('/').filter(Boolean);
+                // Drop the document name (index.html) if present.
+                if (baseSegments.length > 0 && /\.[^/]+$/.test(baseSegments[baseSegments.length - 1])) {
+                    baseSegments.pop();
+                }
+                if (baseSegments.length > 0) {
+                    variants.add(`/${baseSegments.join('/')}/${withoutLeadingSlash}`);
+                }
+            } catch (error) {
+                // no-op: fallback variants above are enough in restricted environments.
+            }
+
+            return Array.from(variants).filter(Boolean);
         }
 
         function getPathVariants(inputPath) {
             const resolvedPaths = resolveConfiguredPath(inputPath);
             if (resolvedPaths.length === 0) return [];
-            const trimmed = resolvedPaths[0];
-            if (/^https?:\/\//i.test(trimmed)) return [trimmed];
-            const hasTrailingSlash = trimmed.endsWith('/');
-            const rawSegments = trimmed.split('/').filter(Boolean);
-            if (rawSegments.length === 0) return [trimmed];
 
-            const last = rawSegments[rawSegments.length - 1];
-            const variants = new Set([trimmed]);
-            const alternates = [
-                last.toLowerCase(),
-                last.toUpperCase(),
-                last[0].toUpperCase() + last.slice(1).toLowerCase()
-            ];
+            const variants = new Set();
+            resolvedPaths.forEach((basePath) => {
+                if (/^https?:\/\//i.test(basePath)) {
+                    variants.add(basePath);
+                    return;
+                }
 
-            // Common audiobook casing seen in host media folders.
-            if (last.toLowerCase() === 'audiobooks') {
-                alternates.push('AudioBooks');
-            }
+                const hasTrailingSlash = basePath.endsWith('/');
+                const rawSegments = basePath.split('/').filter(Boolean);
+                if (rawSegments.length === 0) {
+                    variants.add(basePath);
+                    return;
+                }
 
-            alternates.forEach((candidateLast) => {
-                const candidateSegments = [...rawSegments.slice(0, -1), candidateLast];
-                const candidate = `/${candidateSegments.join('/')}${hasTrailingSlash ? '/' : ''}`;
-                variants.add(candidate);
+                const last = rawSegments[rawSegments.length - 1];
+                const alternates = [
+                    last.toLowerCase(),
+                    last.toUpperCase(),
+                    last[0].toUpperCase() + last.slice(1).toLowerCase()
+                ];
+
+                // Common audiobook casing seen in host media folders.
+                if (last.toLowerCase() === 'audiobooks') {
+                    alternates.push('AudioBooks');
+                }
+
+                const prefix = basePath.startsWith('/') ? '/' : '';
+                const pushCandidate = (candidateLast) => {
+                    const candidateSegments = [...rawSegments.slice(0, -1), candidateLast];
+                    const candidate = `${prefix}${candidateSegments.join('/')}${hasTrailingSlash ? '/' : ''}`;
+                    variants.add(candidate);
+                };
+
+                pushCandidate(last);
+                alternates.forEach(pushCandidate);
+
+                if (!hasTrailingSlash) {
+                    variants.add(`${prefix}${rawSegments.join('/')}/`);
+                }
             });
-
-            if (!hasTrailingSlash) {
-                variants.add(`${trimmed}/`);
-            }
 
             return Array.from(variants);
         }
