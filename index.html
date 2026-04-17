@@ -217,6 +217,16 @@
             <div class="space-y-4">
                 <label class="block text-2xl font-bold text-amber-400">Internet Radio Source (JSON/M3U)</label>
                 <input type="text" id="radioPath" value="/api/radio-stations" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
+                <p class="text-slate-400 text-lg">Used only when no custom stations are saved below.</p>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex justify-between items-center gap-4">
+                    <label class="block text-2xl font-bold text-amber-400">Custom Radio Stations</label>
+                    <button type="button" onclick="addRadioStationEditorRow()" class="tap-target bg-slate-700 text-white text-lg font-bold py-3 px-5 rounded-xl">Add Station</button>
+                </div>
+                <p class="text-slate-400 text-lg">Add station name and stream URL. If stations are listed here, they are used instead of the source path above.</p>
+                <div id="radioStationEditorList" class="space-y-4"></div>
             </div>
             
             <div class="space-y-4">
@@ -273,12 +283,14 @@
             books: [],
             music: []
         };
+        const RADIO_STATIONS_STORAGE_KEY = 'simpleMediaRadioStations';
         const configDefaults = {
             radioPath: '/api/radio-stations',
             booksPath: 'AudioBooks',
             musicPath: 'Music'
         };
         let appConfig = { ...configDefaults };
+        let customRadioStations = [];
         
         let restTapCount = 0;
         let restTapTimer;
@@ -1022,6 +1034,98 @@
             document.getElementById('radioPath').value = appConfig.radioPath;
             document.getElementById('booksPath').value = appConfig.booksPath;
             document.getElementById('musicPath').value = appConfig.musicPath;
+            loadCustomRadioStations();
+            renderRadioStationEditor();
+        }
+
+        function normalizeCustomRadioStations(rawStations) {
+            if (!Array.isArray(rawStations)) return [];
+            return rawStations
+                .map((station) => {
+                    if (!station || typeof station !== 'object') return null;
+                    const title = String(station.title || '').trim();
+                    const url = String(station.url || '').trim();
+                    if (!title || !url) return null;
+                    return {
+                        title,
+                        url,
+                        subtitle: station.subtitle || 'Radio'
+                    };
+                })
+                .filter(Boolean);
+        }
+
+        function loadCustomRadioStations() {
+            try {
+                const savedStations = localStorage.getItem(RADIO_STATIONS_STORAGE_KEY);
+                customRadioStations = savedStations ? normalizeCustomRadioStations(JSON.parse(savedStations)) : [];
+            } catch (error) {
+                customRadioStations = [];
+                addLog('warn', 'Could not parse custom radio stations', error && error.message ? error.message : error);
+            }
+        }
+
+        function createRadioStationRow(station = {}) {
+            const row = document.createElement('div');
+            row.className = 'bg-slate-900 border border-slate-700 rounded-2xl p-4 space-y-3';
+            row.innerHTML = `
+                <div class="space-y-2">
+                    <label class="block text-base font-semibold text-slate-300">Station name</label>
+                    <input type="text" value="${station.title || ''}" placeholder="Example: Jazz FM" class="radio-station-title w-full bg-slate-800 text-white text-lg p-4 rounded-xl border border-slate-700 focus:border-amber-400 outline-none">
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-base font-semibold text-slate-300">Stream URL</label>
+                    <input type="text" value="${station.url || ''}" placeholder="https://stream.example.com/live.mp3" class="radio-station-url w-full bg-slate-800 text-white text-lg p-4 rounded-xl border border-slate-700 focus:border-amber-400 outline-none">
+                </div>
+            `;
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'tap-target bg-rose-700 text-white text-base font-bold py-3 px-4 rounded-xl';
+            removeButton.innerText = 'Remove station';
+            removeButton.addEventListener('click', () => row.remove());
+            row.appendChild(removeButton);
+            return row;
+        }
+
+        function renderRadioStationEditor() {
+            const list = document.getElementById('radioStationEditorList');
+            if (!list) return;
+            list.innerHTML = '';
+            if (customRadioStations.length === 0) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'bg-slate-900 border border-slate-700 rounded-2xl p-6 text-slate-400 text-lg';
+                emptyState.innerText = 'No custom stations yet. Tap "Add Station" to create one.';
+                list.appendChild(emptyState);
+                return;
+            }
+            customRadioStations.forEach(station => {
+                list.appendChild(createRadioStationRow(station));
+            });
+        }
+
+        function addRadioStationEditorRow() {
+            const list = document.getElementById('radioStationEditorList');
+            if (!list) return;
+            const hasEmptyState = list.children.length === 1 && list.firstElementChild && list.firstElementChild.innerText.includes('No custom stations yet');
+            if (hasEmptyState) {
+                list.innerHTML = '';
+            }
+            list.appendChild(createRadioStationRow());
+        }
+
+        function collectCustomRadioStationsFromEditor() {
+            const rows = Array.from(document.querySelectorAll('#radioStationEditorList > div'));
+            const stations = rows
+                .map((row) => {
+                    const titleInput = row.querySelector('.radio-station-title');
+                    const urlInput = row.querySelector('.radio-station-url');
+                    const title = titleInput ? titleInput.value.trim() : '';
+                    const url = urlInput ? urlInput.value.trim() : '';
+                    if (!title || !url) return null;
+                    return { title, url, subtitle: 'Radio' };
+                })
+                .filter(Boolean);
+            return normalizeCustomRadioStations(stations);
         }
 
         function normalizeLibraryData(raw) {
@@ -1433,7 +1537,9 @@
         }
 
         async function loadLibraries() {
-            const radioRaw = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
+            const radioRaw = customRadioStations.length > 0
+                ? customRadioStations
+                : await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
             const booksRaw = await fetchLibrary(appConfig.booksPath, defaultLibrary.books, { scanDirectory: true, mediaTypeLabel: 'Audiobook' });
             const radio = normalizeLibraryItems(radioRaw, 'Radio');
             const books = normalizeLibraryItems(booksRaw, 'Audiobook');
@@ -1462,8 +1568,11 @@
             const rPath = document.getElementById('radioPath').value.trim();
             const bPath = document.getElementById('booksPath').value.trim();
             const mPath = document.getElementById('musicPath').value.trim();
+            const editorStations = collectCustomRadioStationsFromEditor();
             appConfig = { radioPath: rPath, booksPath: bPath, musicPath: mPath };
+            customRadioStations = editorStations;
             localStorage.setItem('simpleMediaConfig', JSON.stringify(appConfig));
+            localStorage.setItem(RADIO_STATIONS_STORAGE_KEY, JSON.stringify(customRadioStations));
             loadLibraries();
             showToast("Configuration Saved", 'check-circle');
             closeConfig();

@@ -95,6 +95,7 @@ Result:
 - **Tap media cards**: start playback for a station/book/album.
 - **Now Playing bar**: pause/resume, view current title, and close the player strip.
 - **Hidden config screen**: tap the **Rest** tab 3 times quickly, then set Radio/Books/Music source paths. Saved values are persisted in browser storage and immediately used to load media libraries.
+  - In that screen, you can also add/edit/remove **Custom Radio Stations** (name + stream URL). When at least one custom station is saved, the Radio tab uses that local list instead of the configured radio source path.
 - **Rest tab**:
   - Set **Sleep Timer** (15/30/60 minutes or Off).
   - Toggle **Background Noise** and choose White/Pink/Blue noise.
