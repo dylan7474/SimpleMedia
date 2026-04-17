@@ -48,6 +48,7 @@ const path = require('path');
 const PORT = Number(process.env.PORT || 3014);
 const ROOT = process.env.STATIC_ROOT || '/app';
 const ENABLE_HTTPS = process.env.ENABLE_HTTPS === '1';
+const MEDIA_ROOT = process.env.MEDIA_ROOT || '/media-root';
 const TLS_CERT_PATH = process.env.TLS_CERT_PATH || '/app/tls/cert.pem';
 const TLS_KEY_PATH = process.env.TLS_KEY_PATH || '/app/tls/key.pem';
 
@@ -142,22 +143,37 @@ const requestHandler = (req, res) => {
     .normalize(requestedPath)
     .replace(/^([.][./\\])+/, '')
     .replace(/^[/\\]+/, '');
-  const filePath = path.join(ROOT, safePath);
 
-  fs.stat(filePath, (err, stat) => {
-    if (err) {
+  const candidatePaths = [path.join(ROOT, safePath)];
+  if (safePath.toLowerCase().startsWith('media/')) {
+    candidatePaths.push(path.join(MEDIA_ROOT, safePath.slice('media/'.length)));
+  }
+  candidatePaths.push(path.join(MEDIA_ROOT, safePath));
+
+  const tryCandidate = (candidateIndex) => {
+    if (candidateIndex >= candidatePaths.length) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Not found');
       return;
     }
 
-    if (stat.isDirectory()) {
-      sendDirectoryListing(filePath, requestedPath, res);
-      return;
-    }
+    const filePath = candidatePaths[candidateIndex];
+    fs.stat(filePath, (err, stat) => {
+      if (err) {
+        tryCandidate(candidateIndex + 1);
+        return;
+      }
 
-    sendFile(filePath, res);
-  });
+      if (stat.isDirectory()) {
+        sendDirectoryListing(filePath, requestedPath, res);
+        return;
+      }
+
+      sendFile(filePath, res);
+    });
+  };
+
+  tryCandidate(0);
 };
 
 if (ENABLE_HTTPS) {
@@ -224,6 +240,7 @@ ENV ENABLE_HTTPS=1
 ENV TLS_HOST=${HOST_ARG}
 ENV TLS_CERT_PATH=/app/tls/cert.pem
 ENV TLS_KEY_PATH=/app/tls/key.pem
+ENV MEDIA_ROOT=/media-root
 RUN chmod +x /app/entrypoint.sh
 CMD ["/app/entrypoint.sh"]
 DOCKER_EOF
