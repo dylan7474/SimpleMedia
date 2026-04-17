@@ -1226,12 +1226,30 @@
             const variants = new Set();
             const withoutLeadingSlash = trimmed.replace(/^\/+/, '');
             const withSingleLeadingSlash = `/${withoutLeadingSlash}`;
+            const withoutMediaPrefix = withoutLeadingSlash.replace(/^media\/+/i, '');
+
+            const addVariant = (candidate) => {
+                if (!candidate) return;
+                if (/^https?:\/\//i.test(candidate)) {
+                    variants.add(candidate);
+                    return;
+                }
+                const cleaned = candidate
+                    .replace(/\/{2,}/g, '/')
+                    .replace(/\/+$/, '');
+                if (cleaned) {
+                    variants.add(cleaned.startsWith('/') ? cleaned : `/${cleaned}`);
+                }
+            };
 
             // Try host root path.
-            variants.add(withSingleLeadingSlash);
-            // Also try relative to the current app location. This matters when the app
-            // is served from a sub-path instead of the web root.
-            variants.add(withoutLeadingSlash);
+            addVariant(withSingleLeadingSlash);
+            // Also try a `/media` prefix so deployments that expose files below
+            // `/media/*` are reachable without manually changing config paths.
+            addVariant(`/media/${withoutMediaPrefix}`);
+            // Keep relative-style lookups for sub-path hosting compatibility.
+            addVariant(withoutLeadingSlash);
+            addVariant(`media/${withoutMediaPrefix}`);
 
             try {
                 const currentPath = window.location.pathname || '/';
@@ -1241,7 +1259,9 @@
                     baseSegments.pop();
                 }
                 if (baseSegments.length > 0) {
-                    variants.add(`/${baseSegments.join('/')}/${withoutLeadingSlash}`);
+                    const basePrefix = `/${baseSegments.join('/')}`;
+                    addVariant(`${basePrefix}/${withoutLeadingSlash}`);
+                    addVariant(`${basePrefix}/media/${withoutMediaPrefix}`);
                 }
             } catch (error) {
                 // no-op: fallback variants above are enough in restricted environments.
