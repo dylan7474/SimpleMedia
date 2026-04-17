@@ -1259,6 +1259,16 @@
             return Array.from(variants);
         }
 
+        function summarizeFetchFailure(candidatePath, response, error) {
+            if (error) {
+                return `${candidatePath} :: ${error && error.message ? error.message : error}`;
+            }
+            if (response) {
+                return `${candidatePath} :: HTTP ${response.status}`;
+            }
+            return `${candidatePath} :: Unknown failure`;
+        }
+
         function parseDirectoryListing(rawHtml, basePath, mediaTypeLabel) {
             const parser = new DOMParser();
             const doc = parser.parseFromString(rawHtml, 'text/html');
@@ -1342,37 +1352,48 @@
         async function fetchLibrary(path, fallbackData, options = {}) {
             const { allowM3U = false, scanDirectory = false, mediaTypeLabel = 'Media' } = options;
             const pathCandidates = scanDirectory ? getPathVariants(path) : resolveConfiguredPath(path);
+            const failures = [];
             try {
                 for (const candidatePath of pathCandidates) {
-                    const response = await fetch(candidatePath);
-                    if (!response.ok) continue;
-                    const contentType = response.headers.get('content-type') || '';
-                    const body = await response.text();
-                    const looksLikeM3U = contentType.includes('mpegurl')
-                        || contentType.includes('m3u')
-                        || body.trim().startsWith('#EXTM3U')
-                        || candidatePath.toLowerCase().endsWith('.m3u');
-                    if (allowM3U && looksLikeM3U) {
-                        const parsed = parseM3U(body);
-                        if (parsed.length > 0) return parsed;
-                    }
                     try {
-                        const data = JSON.parse(body);
-                        const normalized = normalizeLibraryData(data);
-                        if (normalized.length) return normalized;
-                    } catch (parseError) {
-                        if (scanDirectory) {
-                            let discoveredItems = [];
-                            if (contentType.includes('text/html')) {
-                                const listing = parseDirectoryListing(body, response.url, mediaTypeLabel);
-                                discoveredItems = listing.files;
-                            }
-                            if (discoveredItems.length === 0) {
-                                discoveredItems = await discoverDirectoryMedia(candidatePath, mediaTypeLabel);
-                            }
-                            if (discoveredItems.length > 0) return discoveredItems;
+                        const response = await fetch(candidatePath);
+                        if (!response.ok) {
+                            failures.push(summarizeFetchFailure(candidatePath, response));
+                            continue;
                         }
+                        const contentType = response.headers.get('content-type') || '';
+                        const body = await response.text();
+                        const looksLikeM3U = contentType.includes('mpegurl')
+                            || contentType.includes('m3u')
+                            || body.trim().startsWith('#EXTM3U')
+                            || candidatePath.toLowerCase().endsWith('.m3u');
+                        if (allowM3U && looksLikeM3U) {
+                            const parsed = parseM3U(body);
+                            if (parsed.length > 0) return parsed;
+                        }
+                        try {
+                            const data = JSON.parse(body);
+                            const normalized = normalizeLibraryData(data);
+                            if (normalized.length) return normalized;
+                        } catch (parseError) {
+                            if (scanDirectory) {
+                                let discoveredItems = [];
+                                if (contentType.includes('text/html')) {
+                                    const listing = parseDirectoryListing(body, response.url, mediaTypeLabel);
+                                    discoveredItems = listing.files;
+                                }
+                                if (discoveredItems.length === 0) {
+                                    discoveredItems = await discoverDirectoryMedia(candidatePath, mediaTypeLabel);
+                                }
+                                if (discoveredItems.length > 0) return discoveredItems;
+                            }
+                        }
+                    } catch (candidateError) {
+                        failures.push(summarizeFetchFailure(candidatePath, null, candidateError));
                     }
+                }
+                if (failures.length > 0) {
+                    addLog('warn', `${mediaTypeLabel} library could not be opened`, failures.join(' | '));
                 }
                 return fallbackData;
             } catch (error) {
@@ -1527,12 +1548,19 @@
 
         async function openMusicFolder(path, pushHistory = false) {
             const candidatePaths = getPathVariants(path);
+            const failures = [];
             for (const candidatePath of candidatePaths) {
                 try {
                     const response = await fetch(candidatePath);
-                    if (!response.ok) continue;
+                    if (!response.ok) {
+                        failures.push(summarizeFetchFailure(candidatePath, response));
+                        continue;
+                    }
                     const contentType = response.headers.get('content-type') || '';
-                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) continue;
+                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
+                        failures.push(`${candidatePath} :: Unsupported content-type (${contentType || 'none'})`);
+                        continue;
+                    }
                     const html = await response.text();
                     const listing = parseDirectoryListing(html, response.url, 'Track');
                     const albums = [
@@ -1550,11 +1578,14 @@
                     });
                     return true;
                 } catch (error) {
-                    addLog('warn', `Could not open music folder`, `${candidatePath} :: ${error && error.message ? error.message : error}`);
+                    const failure = summarizeFetchFailure(candidatePath, null, error);
+                    failures.push(failure);
+                    addLog('warn', `Could not open music folder`, failure);
                     console.warn(`Could not open music folder "${candidatePath}"`, error);
                 }
             }
-            addLog('warn', 'Music folder could not be opened', path);
+            const details = failures.length > 0 ? failures.join(' | ') : path;
+            addLog('warn', 'Music folder could not be opened', details);
             return false;
         }
 
