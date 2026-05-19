@@ -1,1608 +1,850 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Elder Media Player Interface</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Launchpad</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            850: '#1f2937',
+                            900: '#111827',
+                            950: '#030712',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        /* Prevent text selection and default touch actions for a native app feel */
         body {
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: pan-y; /* Allow vertical scrolling inside containers, handle horizontal in JS */
-            overflow: hidden;
-            background-color: #0f172a; /* Dark slate for high contrast and low glare */
-            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            transition: background-image 0.3s ease;
         }
 
-        /* Smooth page transitions */
-        #carousel {
-            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        /* Dark overlay to keep buttons and text readable over custom backgrounds */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(15, 23, 42, 0.7); /* Slate 900 with opacity */
+            z-index: -1;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
         }
 
-        /* Active touch state for visual feedback */
-        .tap-target:active {
-            transform: scale(0.96);
-            transition: transform 0.1s;
-        }
-        .tap-target {
-            transition: transform 0.2s;
-        }
-
-        /* Hide scrollbar for a cleaner look */
-        ::-webkit-scrollbar {
-            width: 0px;
-            background: transparent;
-        }
-
-        /* Custom range slider for elderly */
-        input[type=range] {
-            -webkit-appearance: none;
-            width: 100%;
-            background: transparent;
-            touch-action: pan-x; /* Allow horizontal dragging on sliders */
-        }
-        #npSeekBar {
-            touch-action: pan-x; /* Keep native slider drag behavior on touch devices */
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 48px;
-            width: 48px;
-            border-radius: 50%;
-            background: #fbbf24; /* Amber-400 */
-            cursor: pointer;
-            margin-top: -16px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 16px;
-            cursor: pointer;
-            background: #334155; /* Slate-700 */
-            border-radius: 8px;
+        body.has-bg::before {
+            opacity: 1;
         }
         
-        /* Toast animation */
-        @keyframes fadeOut {
-            0% { opacity: 1; transform: translate(-50%, 0); }
-            80% { opacity: 1; transform: translate(-50%, 0); }
-            100% { opacity: 0; transform: translate(-50%, -20px); }
+        .bookmark-btn {
+            transition: all 0.2s ease;
         }
-        .toast-anim {
-            animation: fadeOut 2.5s forwards;
+        
+        .bookmark-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .edit-mode-active .bookmark-btn {
+            animation: pulse-border 2s infinite;
+            cursor: grab;
+        }
+
+        .edit-mode-active .bookmark-btn:active {
+            cursor: grabbing;
+        }
+
+        .edit-mode-active .bookmark-btn:hover {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+
+        .bookmark-btn.drag-over {
+            border-color: #3b82f6 !important;
+            background-color: rgba(59, 130, 246, 0.2) !important;
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+            70% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+
+        /* Modal backdrop */
+        dialog::backdrop {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
+        
+        /* Hide scrollbar for cleaner look but keep functionality */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
         }
     </style>
 </head>
-<body class="h-screen w-screen flex flex-col font-sans relative">
+<body class="min-h-screen flex flex-col selection:bg-blue-500/30">
 
-    <!-- Top Header -->
-    <header class="pt-8 pb-4 px-6 flex justify-between items-center bg-slate-900 z-10 shrink-0 border-b border-slate-800">
-        <h1 class="text-4xl font-bold text-amber-400" id="pageTitle">Radio</h1>
-        <div class="text-2xl font-medium text-slate-300 flex items-center gap-4">
-            <span id="sleepIndicator" class="hidden text-blue-400 flex items-center gap-2">
-                <i data-lucide="moon" class="w-6 h-6"></i> <span id="sleepTime">30m</span>
-            </span>
-            <span id="clock">12:00 PM</span>
+    <!-- Header Navigation -->
+    <header class="sticky top-0 z-10 backdrop-blur-md bg-slate-900/80 border-b border-slate-800 px-6 py-4 flex justify-between items-center shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight">Launchpad</h1>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <button id="toggleEditBtn" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                <span id="editText">Edit Mode</span>
+            </button>
+            <div class="w-px h-6 bg-slate-700 mx-1"></div>
+            
+            <!-- Config Export/Import -->
+            <button id="exportBtn" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors tooltip-trigger" title="Export Config">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            </button>
+            <label class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer tooltip-trigger" title="Import Config">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                <input type="file" id="importFile" class="hidden" accept=".json" />
+            </label>
+
+            <div class="w-px h-6 bg-slate-700 mx-1"></div>
+            
+            <!-- Background Controls -->
+            <label class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer tooltip-trigger" title="Set Background Image">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                <input type="file" id="bgInput" class="hidden" accept="image/*" />
+            </label>
+            <button id="bgClearBtn" class="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors hidden tooltip-trigger" title="Clear Background">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M15 9l-6 6"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
+            </button>
         </div>
     </header>
 
-    <!-- Main Swipeable Area -->
-    <main class="flex-1 overflow-hidden relative" id="touchArea">
-        <div id="carousel" class="flex h-full w-[400%]">
-            
-            <!-- PAGE 1: Internet Radio -->
-            <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
-                <div class="grid grid-cols-2 gap-6" id="radioGrid">
-                </div>
+    <!-- Main Content -->
+    <main id="mainContainer" class="flex-1 flex flex-col p-6 max-w-6xl mx-auto w-full gap-8">
+        
+        <!-- Edit Mode Banner -->
+        <div id="editBanner" class="hidden bg-blue-500/20 border border-blue-500/50 text-blue-200 px-4 py-3 rounded-lg flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span><strong>Edit Mode Active.</strong> Drag to reorder, or click any tile to edit its destination.</span>
             </div>
-
-            <!-- PAGE 2: Audio Books -->
-            <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
-                <div class="flex flex-col gap-6" id="booksList">
-                </div>
-            </div>
-
-            <!-- PAGE 3: Music Albums -->
-            <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
-                <div class="grid grid-cols-2 gap-6" id="musicGrid">
-                </div>
-            </div>
-
-            <!-- PAGE 4: Rest & Settings -->
-            <div class="w-1/4 h-full overflow-y-auto p-6 pb-40">
-                <!-- Sleep Timer Section -->
-                <div class="mb-10">
-                    <h2 class="text-3xl font-bold mb-6 text-amber-400 border-b border-slate-700 pb-2">Sleep Timer (Turn off after)</h2>
-                    <div class="grid grid-cols-4 gap-4">
-                        <button onclick="setSleep(15)" class="sleep-btn tap-target bg-slate-800 text-3xl font-bold py-8 rounded-3xl border-4 border-transparent">15<br><span class="text-xl font-normal text-slate-400">mins</span></button>
-                        <button onclick="setSleep(30)" class="sleep-btn tap-target bg-slate-800 text-3xl font-bold py-8 rounded-3xl border-4 border-transparent">30<br><span class="text-xl font-normal text-slate-400">mins</span></button>
-                        <button onclick="setSleep(60)" class="sleep-btn tap-target bg-slate-800 text-3xl font-bold py-8 rounded-3xl border-4 border-transparent">60<br><span class="text-xl font-normal text-slate-400">mins</span></button>
-                        <button onclick="setSleep(0)" class="sleep-btn active-sleep tap-target bg-slate-700 text-3xl font-bold py-8 rounded-3xl border-4 border-slate-500">OFF</button>
-                    </div>
-                </div>
-
-                <!-- Noise Generator Section -->
-                <div>
-                    <div class="flex justify-between items-end mb-6 border-b border-slate-700 pb-2">
-                        <h2 class="text-3xl font-bold text-amber-400">Background Noise</h2>
-                        <span class="text-lg text-slate-400 mb-1">(Double tap anywhere to turn on/off)</span>
-                    </div>
-                    
-                    <button onclick="toggleNoise()" id="mainNoiseToggle" class="tap-target w-full bg-slate-800 text-white text-3xl font-bold py-8 rounded-3xl mb-6 flex justify-center items-center gap-4">
-                        <i data-lucide="waves" class="w-10 h-10"></i> 
-                        <span id="noiseToggleText">Turn Noise ON</span>
-                    </button>
-
-                    <div class="grid grid-cols-3 gap-4 mb-8">
-                        <button onclick="setNoiseType('White')" class="noise-type-btn tap-target bg-slate-700 border-4 border-amber-400 text-2xl font-bold py-6 rounded-3xl">White</button>
-                        <button onclick="setNoiseType('Pink')" class="noise-type-btn tap-target bg-slate-800 border-4 border-transparent text-2xl font-bold py-6 rounded-3xl text-pink-300">Pink</button>
-                        <button onclick="setNoiseType('Blue')" class="noise-type-btn tap-target bg-slate-800 border-4 border-transparent text-2xl font-bold py-6 rounded-3xl text-blue-300">Blue</button>
-                    </div>
-
-                    <div class="bg-slate-800 p-8 rounded-3xl">
-                        <label class="text-2xl font-bold mb-6 block">Noise Volume</label>
-                        <input type="range" min="1" max="100" value="50" class="w-full" id="noiseVolume">
-                        <div class="flex justify-between text-xl text-slate-400 mt-4">
-                            <span>Quiet</span>
-                            <span>Loud</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+            <button id="doneEditingBtn" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">Done</button>
         </div>
+
+        <!-- Upper Half: 8 Large Buttons -->
+        <section class="flex-1 min-h-[40vh] flex flex-col justify-center">
+            <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-md">Primary Sites</h2>
+            <div id="primaryGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-6">
+                <!-- Rendered via JS -->
+            </div>
+        </section>
+
+        <!-- Divider -->
+        <div class="flex items-center gap-4 opacity-50">
+            <div class="h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent flex-1"></div>
+        </div>
+
+        <!-- Lower Half: 16 Smaller Buttons -->
+        <section class="flex-1 min-h-[40vh] flex flex-col justify-start pb-8">
+            <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-md">Secondary Sites</h2>
+            <div id="secondaryGrid" class="grid grid-cols-4 sm:grid-cols-8 gap-3 md:gap-4">
+                <!-- Rendered via JS -->
+            </div>
+        </section>
+
     </main>
 
-    <!-- Now Playing Persistent Bar -->
-    <div id="nowPlayingBar" class="absolute bottom-[100px] left-4 right-4 bg-slate-800 rounded-3xl shadow-2xl border-2 border-slate-700 flex items-center p-4 gap-6 hidden transform transition-transform duration-300 translate-y-full">
-        <button onclick="togglePlay()" class="tap-target w-24 h-24 bg-amber-400 text-slate-900 rounded-full flex items-center justify-center shrink-0 shadow-lg">
-            <i data-lucide="pause" id="playIcon" class="w-12 h-12 fill-current"></i>
-        </button>
-        <div class="flex-1 overflow-hidden">
-            <div class="text-xl text-amber-400 font-medium mb-1" id="npType">Now Playing</div>
-            <div class="text-3xl font-bold truncate" id="npTitle">--</div>
-            <div id="npProgressContainer" class="mt-3 hidden">
-                <input id="npSeekBar" type="range" min="0" max="1000" value="0" class="w-full">
-                <div class="flex justify-between text-lg text-slate-300 mt-1">
-                    <span id="npCurrentTime">0:00</span>
-                    <span id="npDuration">0:00</span>
-                </div>
-            </div>
+    <!-- Edit Modal -->
+    <dialog id="editModal" class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-0 w-full max-w-md text-slate-200 m-auto">
+        <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+            <h3 class="text-lg font-semibold" id="modalTitle">Edit Bookmark</h3>
+            <button id="closeModalBtn" class="text-slate-400 hover:text-white transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
-        <button onclick="closeNowPlaying()" class="tap-target w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center shrink-0 text-slate-300">
-            <i data-lucide="x" class="w-8 h-8"></i>
-        </button>
-    </div>
-
-    <!-- Bottom Navigation -->
-    <nav class="bg-slate-950 flex justify-around items-center h-[100px] pb-4 px-2 shrink-0 z-20 shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
-        <button onclick="goToTab(0)" class="nav-btn text-amber-400 flex flex-col items-center justify-center w-1/4 h-full gap-2 transition-colors">
-            <i data-lucide="radio" class="w-10 h-10"></i>
-            <span class="text-xl font-bold">Radio</span>
-        </button>
-        <button onclick="goToTab(1)" class="nav-btn text-slate-500 flex flex-col items-center justify-center w-1/4 h-full gap-2 transition-colors">
-            <i data-lucide="book-open" class="w-10 h-10"></i>
-            <span class="text-xl font-bold">Books</span>
-        </button>
-        <button onclick="goToTab(2)" class="nav-btn text-slate-500 flex flex-col items-center justify-center w-1/4 h-full gap-2 transition-colors">
-            <i data-lucide="disc" class="w-10 h-10"></i>
-            <span class="text-xl font-bold">Music</span>
-        </button>
-        <button onclick="goToTab(3)" class="nav-btn text-slate-500 flex flex-col items-center justify-center w-1/4 h-full gap-2 transition-colors">
-            <i data-lucide="moon" class="w-10 h-10"></i>
-            <span class="text-xl font-bold">Rest</span>
-        </button>
-    </nav>
-
-    <!-- Toast Notification Overlay for Double Tap / Saving -->
-    <div id="toast" class="absolute top-1/3 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-900 text-3xl font-bold py-6 px-10 rounded-full shadow-2xl z-50 pointer-events-none hidden items-center gap-4">
-        <i data-lucide="info" class="w-10 h-10 hidden" id="toastIcon"></i>
-        <span id="toastText">Action Successful</span>
-    </div>
-
-    <!-- Hidden Config Screen (Caregiver / Admin Setup) -->
-    <div id="configScreen" class="fixed inset-0 bg-slate-950 z-[100] hidden flex-col">
-        <header class="pt-8 pb-4 px-6 flex justify-between items-center border-b border-slate-800 shrink-0">
-            <h1 class="text-3xl font-bold text-slate-200">App Configuration</h1>
-            <button onclick="closeConfig()" class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center text-slate-300">
-                <i data-lucide="x" class="w-8 h-8"></i>
-            </button>
-        </header>
-        <div class="flex-1 overflow-y-auto p-6 space-y-8 max-w-2xl mx-auto w-full mt-4">
-            <p class="text-slate-400 text-lg">Set the server folder paths or API endpoints for each media type. This screen is intentionally hidden from standard users.</p>
+        <form id="editForm" class="p-6">
+            <input type="hidden" id="editType">
+            <input type="hidden" id="editIndex">
             
-            <div class="space-y-4">
-                <label class="block text-2xl font-bold text-amber-400">Internet Radio Source (JSON/M3U)</label>
-                <input type="text" id="radioPath" value="/api/radio-stations" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
-            </div>
-
-            <div class="space-y-4">
-                <label class="block text-2xl font-bold text-amber-400">Custom Radio Stations</label>
-                <p class="text-slate-400 text-lg">Add direct stream URLs to always show important stations, even if the main source is offline.</p>
-                <div class="grid grid-cols-1 gap-3">
-                    <input type="text" id="customStationName" placeholder="Station Name (example: Local News)" class="w-full bg-slate-800 text-white text-lg p-4 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
-                    <input type="text" id="customStationUrl" placeholder="Stream URL (https://...)" class="w-full bg-slate-800 text-white text-lg p-4 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
-                    <button onclick="addCustomStationFromForm()" class="tap-target bg-blue-600 text-white text-xl font-bold py-4 rounded-2xl">Add Station</button>
-                </div>
-                <div id="customStationsList" class="space-y-3"></div>
+            <div class="mb-4">
+                <label for="siteName" class="block text-sm font-medium text-slate-400 mb-1">Website Name</label>
+                <input type="text" id="siteName" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-500" placeholder="e.g. GitHub">
             </div>
             
-            <div class="space-y-4">
-                <label class="block text-2xl font-bold text-amber-400">Audio Books Folder Path</label>
-                <input type="text" id="booksPath" value="AudioBooks" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
-                <p class="text-slate-400 text-lg">Use only the subfolder name (example: <strong>AudioBooks</strong> resolves to <strong>/AudioBooks</strong>).</p>
+            <div class="mb-6">
+                <label for="siteUrl" class="block text-sm font-medium text-slate-400 mb-1">URL or Local Path</label>
+                <input type="text" id="siteUrl" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-500" placeholder="https://example.com or C:\apps\app.html">
+                <p class="text-xs text-slate-500 mt-2">Supports normal websites, relative paths (./app.html), or local file locations (file:///...).</p>
             </div>
-
-            <div class="space-y-4">
-                <label class="block text-2xl font-bold text-amber-400">Music Albums Folder Path</label>
-                <input type="text" id="musicPath" value="Music" class="w-full bg-slate-800 text-white text-xl p-6 rounded-2xl border-2 border-slate-700 focus:border-amber-400 outline-none">
-                <p class="text-slate-400 text-lg">Use only the subfolder name (example: <strong>Music</strong> resolves to <strong>/Music</strong>).</p>
-            </div>
-
-            <button onclick="saveConfig()" class="w-full bg-amber-500 text-slate-900 text-3xl font-bold py-6 rounded-2xl mt-8 shadow-lg tap-target">
-                Save Configuration
-            </button>
-
-            <div class="space-y-4">
-                <div class="flex justify-between items-center">
-                    <label class="block text-2xl font-bold text-amber-400">Diagnostic Logs</label>
-                    <div class="flex gap-3">
-                        <button onclick="refreshLogViewer()" class="tap-target bg-slate-700 text-white text-lg font-bold py-3 px-5 rounded-xl">Refresh</button>
-                        <button onclick="clearLogs()" class="tap-target bg-rose-700 text-white text-lg font-bold py-3 px-5 rounded-xl">Clear</button>
+            
+            <div class="mb-6 border-t border-slate-800 pt-4">
+                <label class="block text-sm font-medium text-slate-400 mb-2">Custom Icon (Optional)</label>
+                <div class="flex items-center gap-4">
+                    <div id="iconPreview" class="w-12 h-12 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden p-1 shrink-0">
+                        <span class="text-xs text-slate-500">None</span>
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                        <input type="file" id="siteIconInput" accept="image/*" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-800 file:text-white hover:file:bg-slate-700 file:cursor-pointer transition-colors border border-slate-700 rounded-lg p-1 bg-slate-900">
+                        <p class="text-xs text-slate-500 mt-2">Overrides the default icon. Images are automatically compressed to keep your config file small.</p>
                     </div>
                 </div>
-                <p class="text-slate-400 text-lg">Recent app events and errors are stored locally to help troubleshoot playback and folder browsing issues.</p>
-                <textarea id="logViewer" readonly class="w-full h-72 bg-slate-900 text-slate-100 text-sm p-4 rounded-2xl border-2 border-slate-700"></textarea>
             </div>
-        </div>
+            
+            <div class="flex justify-between items-center">
+                <button type="button" id="clearBtn" class="text-sm text-red-400 hover:text-red-300 transition-colors px-2 py-1">Clear Link</button>
+                <div class="flex gap-3">
+                    <button type="button" id="cancelModalBtn" class="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20">Save Changes</button>
+                </div>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Message Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 z-50 pointer-events-none">
+        <svg id="toastIcon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-400"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span id="toastMsg" class="text-sm font-medium">Message</span>
     </div>
 
     <script>
-        // Initialize Lucide Icons
-        lucide.createIcons();
-
-        // --- State Management ---
-        let currentTab = 0;
-        let isPlaying = false;
-        let isNoiseOn = false;
-        let noiseType = 'White';
-        let sleepTimer = 0; // minutes
-        let sleepTimeoutId = null;
-        let currentMedia = null;
-        let currentMediaKey = '';
-        let currentMediaType = '';
-        let isSeekDragActive = false;
-        const titles = ["Internet Radio", "Audio Books", "Music Albums", "Rest & Settings"];
-        const appAudio = new Audio();
-        appAudio.preload = 'none';
-
-        const defaultLibrary = {
-            radio: [],
-            books: [],
-            music: []
-        };
-        const configDefaults = {
-            radioPath: '/api/radio-stations',
-            booksPath: 'AudioBooks',
-            musicPath: 'Music'
-        };
-        let appConfig = { ...configDefaults };
-        const CUSTOM_RADIO_STORAGE_KEY = 'simpleMediaCustomStations';
-        let customRadioStations = [];
-        
-        let restTapCount = 0;
-        let restTapTimer;
-        let musicBrowseState = {
-            rootPath: '',
-            currentPath: '',
-            history: []
-        };
-        let albumPlaybackQueue = {
-            tracks: [],
-            currentIndex: -1
-        };
-        const LOG_STORAGE_KEY = 'simpleMediaLogs';
-        const MAX_LOG_ENTRIES = 200;
-        let appLogs = [];
-
-        function loadLogs() {
-            try {
-                const savedLogs = localStorage.getItem(LOG_STORAGE_KEY);
-                appLogs = savedLogs ? JSON.parse(savedLogs) : [];
-                if (!Array.isArray(appLogs)) appLogs = [];
-            } catch (error) {
-                appLogs = [];
-            }
-        }
-
-        function persistLogs() {
-            localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(appLogs.slice(-MAX_LOG_ENTRIES)));
-        }
-
-        function addLog(level, message, details = '') {
-            const safeLevel = (level || 'INFO').toUpperCase();
-            const entry = {
-                time: new Date().toISOString(),
-                level: safeLevel,
-                message,
-                details: details ? String(details) : ''
-            };
-            appLogs.push(entry);
-            if (appLogs.length > MAX_LOG_ENTRIES) {
-                appLogs = appLogs.slice(-MAX_LOG_ENTRIES);
-            }
-            persistLogs();
-            refreshLogViewer();
-        }
-
-        function formatLogEntry(entry) {
-            const time = new Date(entry.time).toLocaleString();
-            const base = `[${time}] [${entry.level}] ${entry.message}`;
-            return entry.details ? `${base}\n  ${entry.details}` : base;
-        }
-
-        function refreshLogViewer() {
-            const viewer = document.getElementById('logViewer');
-            if (!viewer) return;
-            if (!appLogs.length) {
-                viewer.value = 'No logs yet.';
-                return;
-            }
-            viewer.value = appLogs.slice().reverse().map(formatLogEntry).join('\n\n');
-            viewer.scrollTop = 0;
-        }
-
-        function clearLogs() {
-            appLogs = [];
-            persistLogs();
-            refreshLogViewer();
-            showToast('Logs cleared', 'trash-2');
-        }
-
-        function loadCustomRadioStations() {
-            try {
-                const savedStations = localStorage.getItem(CUSTOM_RADIO_STORAGE_KEY);
-                const parsedStations = savedStations ? JSON.parse(savedStations) : [];
-                if (!Array.isArray(parsedStations)) {
-                    customRadioStations = [];
-                    return;
-                }
-                customRadioStations = parsedStations
-                    .map((station) => ({
-                        title: (station && station.title ? String(station.title) : '').trim(),
-                        url: (station && station.url ? String(station.url) : '').trim()
-                    }))
-                    .filter((station) => station.title && station.url);
-            } catch (error) {
-                customRadioStations = [];
-                addLog('warn', 'Could not parse custom radio stations', error && error.message ? error.message : error);
-            }
-        }
-
-        function persistCustomRadioStations() {
-            localStorage.setItem(CUSTOM_RADIO_STORAGE_KEY, JSON.stringify(customRadioStations));
-        }
-
-        function renderCustomStationsEditor() {
-            const list = document.getElementById('customStationsList');
-            if (!list) return;
-            list.innerHTML = '';
-
-            if (customRadioStations.length === 0) {
-                list.innerHTML = `
-                    <div class="bg-slate-900 rounded-2xl p-4 text-slate-400 text-base border border-slate-700">
-                        No custom stations yet. Add one below.
-                    </div>
-                `;
-                return;
-            }
-
-            customRadioStations.forEach((station, index) => {
-                const row = document.createElement('div');
-                row.className = 'bg-slate-900 rounded-2xl border border-slate-700 p-4 space-y-3';
-                row.innerHTML = `
-                    <div class="flex justify-between items-center">
-                        <div class="text-slate-300 text-lg font-semibold truncate pr-4">${station.title}</div>
-                        <button data-remove-index="${index}" class="tap-target bg-rose-700 text-white text-sm font-bold py-2 px-4 rounded-xl">Remove</button>
-                    </div>
-                    <div class="text-slate-400 text-sm break-all">${station.url}</div>
-                `;
-                list.appendChild(row);
-            });
-
-            list.querySelectorAll('[data-remove-index]').forEach((button) => {
-                button.addEventListener('click', () => {
-                    const removeIndex = Number(button.getAttribute('data-remove-index'));
-                    if (Number.isNaN(removeIndex)) return;
-                    customRadioStations.splice(removeIndex, 1);
-                    persistCustomRadioStations();
-                    renderCustomStationsEditor();
-                    loadLibraries();
-                    showToast('Station removed', 'trash-2');
-                });
-            });
-        }
-
-        function addCustomStationFromForm() {
-            const nameInput = document.getElementById('customStationName');
-            const urlInput = document.getElementById('customStationUrl');
-            if (!nameInput || !urlInput) return;
-
-            const title = nameInput.value.trim();
-            const url = urlInput.value.trim();
-            if (!title || !url) {
-                showToast('Enter station name and URL', 'alert-triangle');
-                return;
-            }
-            if (!/^https?:\/\//i.test(url)) {
-                showToast('Station URL must start with http(s)', 'alert-triangle');
-                return;
-            }
-            const duplicate = customRadioStations.some((station) => station.url.toLowerCase() === url.toLowerCase());
-            if (duplicate) {
-                showToast('Station URL already added', 'info');
-                return;
-            }
-
-            customRadioStations.push({ title, url });
-            persistCustomRadioStations();
-            renderCustomStationsEditor();
-            loadLibraries();
-            nameInput.value = '';
-            urlInput.value = '';
-            showToast('Station added', 'check-circle');
-        }
-
-        // --- Clock Update ---
-        function updateClock() {
-            const now = new Date();
-            let hours = now.getHours();
-            let minutes = now.getMinutes();
-            const ampm = hours >= 12 ? 'PM' : 'AM';
-            hours = hours % 12;
-            hours = hours ? hours : 12; 
-            minutes = minutes < 10 ? '0' + minutes : minutes;
-            document.getElementById('clock').innerText = hours + ':' + minutes + ' ' + ampm;
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
-
-        // --- Navigation & Swiping ---
-        const carousel = document.getElementById('carousel');
-        const touchArea = document.getElementById('touchArea');
-        const navBtns = document.querySelectorAll('.nav-btn');
-        const pageTitle = document.getElementById('pageTitle');
-
-        function goToTab(index) {
-            currentTab = Math.max(0, Math.min(index, 3));
-            carousel.style.transform = `translateX(-${currentTab * 25}%)`;
-            pageTitle.innerText = titles[currentTab];
-            
-            navBtns.forEach((btn, i) => {
-                if (i === currentTab) {
-                    btn.classList.remove('text-slate-500');
-                    btn.classList.add('text-amber-400');
-                } else {
-                    btn.classList.remove('text-amber-400');
-                    btn.classList.add('text-slate-500');
-                }
-            });
-
-            // Hidden Config Trigger: 3 taps on the "Rest" tab
-            if (index === 3) {
-                restTapCount++;
-                clearTimeout(restTapTimer);
-                if (restTapCount >= 3) {
-                    openConfig();
-                    restTapCount = 0;
-                } else {
-                    restTapTimer = setTimeout(() => {
-                        restTapCount = 0;
-                    }, 1000); // 1 second window to tap 3 times
-                }
-            } else {
-                restTapCount = 0; // Reset if they tap another tab
-            }
-        }
-
-        // Swipe Detection Logic
-        let touchStartX = 0;
-        let touchEndX = 0;
-        const SWIPE_THRESHOLD = 75; // px distance to trigger swipe
-
-        touchArea.addEventListener('touchstart', e => {
-            touchStartX = e.changedTouches[0].screenX;
-        }, { passive: true });
-
-        touchArea.addEventListener('touchend', e => {
-            touchEndX = e.changedTouches[0].screenX;
-            handleSwipe();
-        }, { passive: true });
-
-        function handleSwipe() {
-            const diff = touchStartX - touchEndX;
-            if (diff > SWIPE_THRESHOLD) goToTab(currentTab + 1); // Swipe left -> next
-            if (diff < -SWIPE_THRESHOLD) goToTab(currentTab - 1); // Swipe right -> prev
-        }
-
-        // --- Double Tap for Noise ---
-        let lastTap = 0;
-        document.body.addEventListener('touchend', function(e) {
-            const currentTime = new Date().getTime();
-            const tapLength = currentTime - lastTap;
-            // Avoid triggering double tap on buttons (let them handle their own clicks)
-            const isButton = e.target.closest('button') || e.target.closest('input');
-            
-            // 500ms window for elderly users to double tap
-            if (tapLength < 500 && tapLength > 50 && !isButton) {
-                toggleNoise();
-                e.preventDefault();
-            }
-            lastTap = currentTime;
-        });
-
-        // --- Media Player Logic ---
-        const nowPlayingBar = document.getElementById('nowPlayingBar');
-        const playIcon = document.getElementById('playIcon');
-        const npTitle = document.getElementById('npTitle');
-        const npType = document.getElementById('npType');
-        const npProgressContainer = document.getElementById('npProgressContainer');
-        const npSeekBar = document.getElementById('npSeekBar');
-        const npCurrentTime = document.getElementById('npCurrentTime');
-        const npDuration = document.getElementById('npDuration');
-        let pendingSeekRatio = null;
-        let deferredSeekTime = null;
-        let isSeekInteractionActive = false;
-        let shouldResumeAfterSeek = false;
-
-        function formatPlaybackTime(totalSeconds) {
-            const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
-            const hours = Math.floor(safeSeconds / 3600);
-            const minutes = Math.floor((safeSeconds % 3600) / 60);
-            const seconds = safeSeconds % 60;
-            if (hours > 0) {
-                return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            }
-            return `${minutes}:${String(seconds).padStart(2, '0')}`;
-        }
-
-        function isSeekableType(type) {
-            return type === 'Audiobook' || type === 'Album';
-        }
-
-        function updateNowPlayingProgressUI() {
-            const isSeekableMedia = isSeekableType(currentMediaType);
-            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
-            if (!isSeekableMedia || !hasDuration) {
-                npProgressContainer.classList.add('hidden');
-                npSeekBar.value = '0';
-                npCurrentTime.innerText = '0:00';
-                npDuration.innerText = '0:00';
-                return;
-            }
-
-            npProgressContainer.classList.remove('hidden');
-            const duration = appAudio.duration;
-            const currentTime = Math.min(Math.max(appAudio.currentTime || 0, 0), duration);
-
-            if ((!isSeekDragActive && !isSeekInteractionActive) || pendingSeekRatio === null) {
-                const ratio = duration ? currentTime / duration : 0;
-                npSeekBar.value = String(Math.round(ratio * 1000));
-            }
-
-            const previewTime = ((isSeekDragActive || isSeekInteractionActive) && pendingSeekRatio !== null)
-                ? Math.min(Math.max(pendingSeekRatio * duration, 0), duration)
-                : currentTime;
-
-            npCurrentTime.innerText = formatPlaybackTime(previewTime);
-            npDuration.innerText = formatPlaybackTime(duration);
-        }
-
-        function seekFromBarValue() {
-            const isSeekableMedia = isSeekableType(currentMediaType);
-            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
-            if (!isSeekableMedia || !hasDuration) return false;
-            const seekRatio = Math.min(Math.max(Number(npSeekBar.value) / 1000, 0), 1);
-            pendingSeekRatio = seekRatio;
-            const previewSeconds = seekRatio * appAudio.duration;
-            npCurrentTime.innerText = formatPlaybackTime(previewSeconds);
-            return true;
-        }
-
-        function setAudioCurrentTime(targetSeconds) {
-            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
-            if (!hasDuration) {
-                deferredSeekTime = targetSeconds;
-                return false;
-            }
-
-            const clampedTarget = Math.min(Math.max(targetSeconds, 0), appAudio.duration);
-            deferredSeekTime = clampedTarget;
-
-            try {
-                appAudio.currentTime = clampedTarget;
-            } catch (error) {
-                // Some browsers can throw while metadata/buffer state catches up; retry on next media event.
-            }
-
-            return true;
-        }
-
-        function flushDeferredSeek() {
-            if (deferredSeekTime === null) return;
-            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
-            if (!hasDuration) return;
-
-            const target = deferredSeekTime;
-            deferredSeekTime = null;
-            try {
-                appAudio.currentTime = target;
-            } catch (error) {
-                deferredSeekTime = target;
-            }
-        }
-
-        function commitSeekFromBarValue() {
-            const isSeekableMedia = isSeekableType(currentMediaType);
-            const hasDuration = Number.isFinite(appAudio.duration) && appAudio.duration > 0;
-            if (!isSeekableMedia || !hasDuration) return false;
-
-            const targetSeconds = (pendingSeekRatio !== null ? pendingSeekRatio : Number(npSeekBar.value) / 1000) * appAudio.duration;
-            setAudioCurrentTime(targetSeconds);
-            npCurrentTime.innerText = formatPlaybackTime(targetSeconds);
-            pendingSeekRatio = null;
-            return true;
-        }
-
-        function beginSeekInteraction() {
-            shouldResumeAfterSeek = isSeekableType(currentMediaType) && !appAudio.paused;
-            isSeekInteractionActive = true;
-            isSeekDragActive = true;
-            pendingSeekRatio = Math.min(Math.max(Number(npSeekBar.value) / 1000, 0), 1);
-        }
-
-        function endSeekInteraction() {
-            isSeekInteractionActive = false;
-            isSeekDragActive = false;
-            pendingSeekRatio = null;
-            updateNowPlayingProgressUI();
-        }
-
-        npSeekBar.addEventListener('pointerdown', beginSeekInteraction);
-        npSeekBar.addEventListener('touchstart', beginSeekInteraction, { passive: true });
-        npSeekBar.addEventListener('focus', beginSeekInteraction);
-
-        npSeekBar.addEventListener('input', () => {
-            beginSeekInteraction();
-            seekFromBarValue();
-            updateNowPlayingProgressUI();
-        });
-
-        npSeekBar.addEventListener('change', () => {
-            commitSeekFromBarValue();
-            updateNowPlayingProgressUI();
-        });
-
-        const finalizeSeek = () => {
-            if (!isSeekDragActive && !isSeekInteractionActive) return;
-            const shouldResume = shouldResumeAfterSeek;
-            commitSeekFromBarValue();
-            endSeekInteraction();
-            if (shouldResume && appAudio.paused) {
-                appAudio.play().catch(() => {});
-            }
-            shouldResumeAfterSeek = false;
+        // Default configuration
+        const DEFAULT_CONFIG = {
+            backgroundImage: null,
+            primary: Array.from({ length: 8 }, (_, i) => ({ title: "", url: "", icon: null })),
+            secondary: Array.from({ length: 16 }, (_, i) => ({ title: "", url: "", icon: null }))
         };
 
-        npSeekBar.addEventListener('pointerup', finalizeSeek);
-        npSeekBar.addEventListener('pointercancel', () => {
-            endSeekInteraction();
-            shouldResumeAfterSeek = false;
-        });
-        npSeekBar.addEventListener('touchend', finalizeSeek, { passive: true });
-        npSeekBar.addEventListener('blur', () => {
-            endSeekInteraction();
-            shouldResumeAfterSeek = false;
-        });
-        document.addEventListener('pointerup', finalizeSeek, { passive: true });
+        // Populate with some sensible defaults for first-time users
+        const INITIAL_DEFAULTS = {
+            backgroundImage: null,
+            primary: [
+                { title: "Google", url: "https://google.com", icon: null },
+                { title: "YouTube", url: "https://youtube.com", icon: null },
+                { title: "GitHub", url: "https://github.com", icon: null },
+                { title: "Reddit", url: "https://reddit.com", icon: null },
+                { title: "Gmail", url: "https://mail.google.com", icon: null },
+                { title: "ChatGPT", url: "https://chatgpt.com", icon: null },
+                { title: "Twitter/X", url: "https://x.com", icon: null },
+                { title: "Netflix", url: "https://netflix.com", icon: null }
+            ],
+            secondary: Array.from({ length: 16 }, (_, i) => ({ title: "", url: "", icon: null }))
+        };
 
-        appAudio.addEventListener('play', () => {
-            isPlaying = true;
-            updatePlayIcon();
-            updateMediaSelectionUI();
-        });
+        // App State
+        let state = {
+            config: null,
+            isEditMode: false
+        };
+        let tempIconBase64 = null;
+        let dragSource = null;
 
-        appAudio.addEventListener('pause', () => {
-            isPlaying = false;
-            updatePlayIcon();
-            updateMediaSelectionUI();
-        });
+        // DOM Elements
+        const primaryGrid = document.getElementById('primaryGrid');
+        const secondaryGrid = document.getElementById('secondaryGrid');
+        const mainContainer = document.getElementById('mainContainer');
+        const toggleEditBtn = document.getElementById('toggleEditBtn');
+        const doneEditingBtn = document.getElementById('doneEditingBtn');
+        const editText = document.getElementById('editText');
+        const editBanner = document.getElementById('editBanner');
+        const editModal = document.getElementById('editModal');
+        const editForm = document.getElementById('editForm');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const cancelModalBtn = document.getElementById('cancelModalBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const importFile = document.getElementById('importFile');
+        const bgInput = document.getElementById('bgInput');
+        const bgClearBtn = document.getElementById('bgClearBtn');
+        const siteIconInput = document.getElementById('siteIconInput');
+        const iconPreview = document.getElementById('iconPreview');
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
 
-        appAudio.addEventListener('ended', async () => {
-            if (await playNextAlbumTrack()) {
-                return;
-            }
-            isPlaying = false;
-            updatePlayIcon();
-            updateMediaSelectionUI();
-            showToast('Playback ended', 'music');
-        });
-
-        appAudio.addEventListener('error', () => {
-            isPlaying = false;
-            updatePlayIcon();
-            updateMediaSelectionUI();
-            updateNowPlayingProgressUI();
-            showToast('Could not play this source', 'alert-triangle');
-        });
-
-        appAudio.addEventListener('loadedmetadata', () => {
-            flushDeferredSeek();
-            updateNowPlayingProgressUI();
-        });
-        appAudio.addEventListener('durationchange', () => {
-            flushDeferredSeek();
-            updateNowPlayingProgressUI();
-        });
-        appAudio.addEventListener('canplay', flushDeferredSeek);
-        appAudio.addEventListener('timeupdate', updateNowPlayingProgressUI);
-        appAudio.addEventListener('seeked', () => {
-            isSeekDragActive = false;
-            if (!isSeekInteractionActive) {
-                pendingSeekRatio = null;
-            }
-            deferredSeekTime = null;
-            updateNowPlayingProgressUI();
-        });
-
-        function makeMediaKey(item, type) {
-            return `${type}:${item && item.url ? item.url : ''}`;
+        // Initialize App
+        function init() {
+            loadConfig();
+            applyBackground();
+            renderGrid();
+            setupEventListeners();
         }
 
-        function updateMediaSelectionUI() {
-            const mediaCards = document.querySelectorAll('[data-media-key]');
-            mediaCards.forEach((card) => {
-                card.classList.remove('border-amber-400', 'bg-slate-700');
-                card.classList.add('border-transparent', 'bg-slate-800');
-                const badge = card.querySelector('.media-state-badge');
-                if (badge) badge.remove();
-            });
-
-            if (!currentMediaKey) return;
-            const activeCard = document.querySelector(`[data-media-key="${CSS.escape(currentMediaKey)}"]`);
-            if (!activeCard) return;
-
-            activeCard.classList.remove('border-transparent');
-            activeCard.classList.add('border-amber-400', 'bg-slate-700');
-
-            const badge = document.createElement('div');
-            badge.className = 'media-state-badge mt-2 text-lg font-bold text-amber-300 flex items-center gap-2';
-            badge.innerHTML = `
-                <i data-lucide="${isPlaying ? 'pause-circle' : 'play-circle'}" class="w-5 h-5"></i>
-                <span>${isPlaying ? 'Playing (tap to pause)' : 'Paused (tap to play)'}</span>
-            `;
-            activeCard.appendChild(badge);
-            lucide.createIcons();
-        }
-
-        async function resolvePlayableMedia(item, type) {
-            if (!item || !item.url) return null;
-            if (canPlayDirectUrl(item.url, type)) return item;
-
-            try {
-                const candidatePaths = getPathVariants(item.url);
-                for (const candidatePath of candidatePaths) {
-                    const response = await fetch(candidatePath);
-                    if (!response.ok) continue;
-                    const contentType = response.headers.get('content-type') || '';
-                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) continue;
-
-                    const html = await response.text();
-                    const listing = parseDirectoryListing(html, response.url, type);
-                    if (listing.files.length > 0) {
-                        const firstTrack = listing.files[0];
-                        return {
-                            ...item,
-                            title: item.title,
-                            subtitle: item.subtitle || type,
-                            url: firstTrack.url
-                        };
-                    }
-                }
-            } catch (error) {
-                addLog('warn', `Could not resolve playable media for ${type}`, `${item.title || 'Unknown'} :: ${error && error.message ? error.message : error}`);
-            }
-
-            return item;
-        }
-
-        async function playMedia(item, type, mediaKey = '') {
-            if (!item || !item.url) {
-                showToast('This item has no playable file', 'alert-triangle');
-                addLog('warn', `Playback blocked: missing URL for ${type}`, JSON.stringify(item || {}));
-                return;
-            }
-            if (type !== 'Album') {
-                albumPlaybackQueue = { tracks: [], currentIndex: -1 };
-            }
-            const playableItem = await resolvePlayableMedia(item, type);
-            if (!playableItem || !playableItem.url || !canPlayDirectUrl(playableItem.url, type)) {
-                showToast('No playable audio file found', 'alert-triangle');
-                addLog('error', `Playback failed for ${type}: ${item.title}`, 'Could not locate a supported audio file.');
-                return;
-            }
-
-            currentMedia = playableItem;
-            currentMediaKey = mediaKey || makeMediaKey(item, type);
-            currentMediaType = type;
-            npTitle.innerText = item.title;
-            npType.innerText = "Playing " + type;
-            appAudio.src = playableItem.url;
-            appAudio.load();
-            updateNowPlayingProgressUI();
-            try {
-                await appAudio.play();
-                addLog('info', `Started playback`, `${type}: ${item.title} (${playableItem.url})`);
-            } catch (error) {
-                showToast('Tap again to allow audio playback', 'volume-x');
-                addLog('error', `Playback failed for ${type}: ${item.title}`, error && error.message ? error.message : error);
-                console.error('Playback failed:', error);
-            }
-
-            updateMediaSelectionUI();
-            nowPlayingBar.classList.remove('hidden');
-            requestAnimationFrame(() => nowPlayingBar.classList.remove('translate-y-full'));
-        }
-
-        function setAlbumPlaybackQueue(tracks, startTrackUrl) {
-            if (!Array.isArray(tracks) || tracks.length === 0 || !startTrackUrl) {
-                albumPlaybackQueue = { tracks: [], currentIndex: -1 };
-                return;
-            }
-
-            const trackIndex = tracks.findIndex(track => track.url === startTrackUrl);
-            if (trackIndex < 0) {
-                albumPlaybackQueue = { tracks: [], currentIndex: -1 };
-                return;
-            }
-
-            albumPlaybackQueue = {
-                tracks,
-                currentIndex: trackIndex
-            };
-        }
-
-        async function playNextAlbumTrack() {
-            const { tracks, currentIndex } = albumPlaybackQueue;
-            if (!Array.isArray(tracks) || tracks.length === 0) return false;
-
-            const nextIndex = currentIndex + 1;
-            if (nextIndex >= tracks.length) {
-                albumPlaybackQueue = { tracks: [], currentIndex: -1 };
-                return false;
-            }
-
-            const nextTrack = tracks[nextIndex];
-            albumPlaybackQueue.currentIndex = nextIndex;
-            const mediaKey = makeMediaKey(nextTrack, 'Album');
-            await playMedia(nextTrack, 'Album', mediaKey);
-            return true;
-        }
-
-        function togglePlay() {
-            if (!currentMedia) {
-                showToast('Select media first', 'info');
-                return;
-            }
-            if (appAudio.paused) {
-                appAudio.play().catch(() => showToast('Unable to resume playback', 'alert-triangle'));
-            } else {
-                appAudio.pause();
-            }
-        }
-
-        function updatePlayIcon() {
-            if (isPlaying) {
-                playIcon.setAttribute('data-lucide', 'pause');
-                playIcon.classList.add('fill-current');
-            } else {
-                playIcon.setAttribute('data-lucide', 'play');
-                playIcon.classList.add('fill-current');
-            }
-            lucide.createIcons();
-        }
-
-        function closeNowPlaying() {
-            isPlaying = false;
-            appAudio.pause();
-            appAudio.removeAttribute('src');
-            appAudio.load();
-            currentMedia = null;
-            currentMediaKey = '';
-            currentMediaType = '';
-            isSeekDragActive = false;
-            isSeekInteractionActive = false;
-            pendingSeekRatio = null;
-            deferredSeekTime = null;
-            albumPlaybackQueue = { tracks: [], currentIndex: -1 };
-            updateNowPlayingProgressUI();
-            updateMediaSelectionUI();
-            nowPlayingBar.classList.add('translate-y-full');
-            setTimeout(() => {
-                nowPlayingBar.classList.add('hidden');
-            }, 300);
-        }
-
-        // --- Noise Generator Logic ---
-        let audioCtx;
-        let noiseSource;
-        let noiseGain;
-        let noiseFilter;
-
-        function initAudio() {
-            if (audioCtx) return;
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-            
-            noiseGain = audioCtx.createGain();
-            noiseGain.connect(audioCtx.destination);
-            
-            noiseFilter = audioCtx.createBiquadFilter();
-            noiseFilter.connect(noiseGain);
-            
-            const volSlider = document.getElementById('noiseVolume');
-            updateVolume(volSlider.value);
-            volSlider.addEventListener('input', (e) => updateVolume(e.target.value));
-        }
-
-        function updateVolume(val) {
-            if (!noiseGain) return;
-            // Exponential curve for a more natural human-ear volume adjustment
-            const fraction = parseInt(val) / 100;
-            noiseGain.gain.value = fraction * fraction; 
-        }
-
-        function playNoise() {
-            initAudio();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            if (noiseSource) stopNoise();
-            
-            // Create a 2-second buffer of random data (White Noise)
-            const bufferSize = audioCtx.sampleRate * 2; 
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const output = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                output[i] = Math.random() * 2 - 1; 
-            }
-            
-            noiseSource = audioCtx.createBufferSource();
-            noiseSource.buffer = buffer;
-            noiseSource.loop = true;
-            
-            applyNoiseFilter(noiseType);
-            
-            noiseSource.connect(noiseFilter);
-            noiseSource.start();
-        }
-
-        function stopNoise() {
-            if (noiseSource) {
-                noiseSource.stop();
-                noiseSource.disconnect();
-                noiseSource = null;
-            }
-        }
-
-        function applyNoiseFilter(type) {
-            if (!noiseFilter) return;
-            if (type === 'White') {
-                noiseFilter.type = 'allpass';
-            } else if (type === 'Pink') {
-                noiseFilter.type = 'lowpass';
-                noiseFilter.frequency.value = 800; // Cuts highs, leaves a warm rumble
-            } else if (type === 'Blue') {
-                noiseFilter.type = 'highpass';
-                noiseFilter.frequency.value = 2000; // Cuts lows, leaves high hiss
-            }
-        }
-
-        function toggleNoise() {
-            isNoiseOn = !isNoiseOn;
-            
-            // Update Toggle Button UI
-            const toggleBtn = document.getElementById('mainNoiseToggle');
-            const toggleText = document.getElementById('noiseToggleText');
-            if (isNoiseOn) {
-                toggleBtn.classList.replace('bg-slate-800', 'bg-amber-400');
-                toggleBtn.classList.replace('text-white', 'text-slate-900');
-                toggleText.innerText = `Turn Noise OFF (${noiseType})`;
-                playNoise();
-            } else {
-                toggleBtn.classList.replace('bg-amber-400', 'bg-slate-800');
-                toggleBtn.classList.replace('text-slate-900', 'text-white');
-                toggleText.innerText = "Turn Noise ON";
-                stopNoise();
-            }
-
-            showToast(`Noise ${isNoiseOn ? 'ON' : 'OFF'}`, 'volume-2');
-        }
-
-        function setNoiseType(type) {
-            noiseType = type;
-            const btns = document.querySelectorAll('.noise-type-btn');
-            btns.forEach(btn => {
-                btn.classList.replace('bg-slate-700', 'bg-slate-800');
-                btn.classList.remove('border-amber-400');
-                btn.classList.add('border-transparent');
-                if (btn.innerText === type) {
-                    btn.classList.replace('bg-slate-800', 'bg-slate-700');
-                    btn.classList.replace('border-transparent', 'border-amber-400');
-                }
-            });
-            if (isNoiseOn) {
-                 document.getElementById('noiseToggleText').innerText = `Turn Noise OFF (${noiseType})`;
-                 showToast(`${type} Noise Selected`, 'volume-2');
-                 applyNoiseFilter(type); // Dynamically change the sound!
-            }
-        }
-
-        function showToast(message, iconName = 'info') {
-            const toast = document.getElementById('toast');
-            const toastIcon = document.getElementById('toastIcon');
-            
-            document.getElementById('toastText').innerText = message;
-            
-            if (iconName) {
-                toastIcon.setAttribute('data-lucide', iconName);
-                toastIcon.classList.remove('hidden');
-                lucide.createIcons();
-            } else {
-                toastIcon.classList.add('hidden');
-            }
-
-            toast.classList.remove('hidden');
-            toast.classList.remove('toast-anim');
-            // Trigger reflow
-            void toast.offsetWidth;
-            toast.classList.add('toast-anim');
-            setTimeout(() => {
-                toast.classList.add('hidden');
-            }, 2500);
-        }
-
-        // --- Sleep Timer Logic ---
-        function setSleep(mins) {
-            sleepTimer = mins;
-            if (sleepTimeoutId) {
-                clearTimeout(sleepTimeoutId);
-                sleepTimeoutId = null;
-            }
-            const btns = document.querySelectorAll('.sleep-btn');
-            
-            btns.forEach(btn => {
-                btn.classList.replace('border-slate-500', 'border-transparent');
-                btn.classList.replace('bg-slate-700', 'bg-slate-800');
-                if(btn.innerText.includes(mins) || (mins === 0 && btn.innerText === 'OFF')) {
-                     btn.classList.replace('border-transparent', 'border-slate-500');
-                     btn.classList.replace('bg-slate-800', 'bg-slate-700');
-                }
-            });
-
-            const indicator = document.getElementById('sleepIndicator');
-            const sleepTimeTxt = document.getElementById('sleepTime');
-            
-            if (mins > 0) {
-                indicator.classList.remove('hidden');
-                sleepTimeTxt.innerText = mins + 'm';
-                sleepTimeoutId = setTimeout(() => {
-                    if (!appAudio.paused || isNoiseOn) {
-                        appAudio.pause();
-                        if (isNoiseOn) toggleNoise();
-                        showToast('Sleep timer stopped playback', 'moon');
-                    }
-                    indicator.classList.add('hidden');
-                    sleepTimer = 0;
-                }, mins * 60 * 1000);
-                showToast(`Sleep set for ${mins} mins`, 'moon');
-            } else {
-                indicator.classList.add('hidden');
-                showToast("Sleep timer OFF", 'moon');
-            }
-        }
-
-        // --- Hidden Config Screen Logic ---
-        const configScreen = document.getElementById('configScreen');
-
+        // Data Management
         function loadConfig() {
-            try {
-                const saved = localStorage.getItem('simpleMediaConfig');
-                if (saved) {
-                    appConfig = { ...configDefaults, ...JSON.parse(saved) };
-                }
-            } catch (error) {
-                addLog('error', 'Could not parse saved config', error && error.message ? error.message : error);
-                console.error('Could not parse saved config', error);
-            }
-            document.getElementById('radioPath').value = appConfig.radioPath;
-            document.getElementById('booksPath').value = appConfig.booksPath;
-            document.getElementById('musicPath').value = appConfig.musicPath;
-        }
-
-        function normalizeLibraryData(raw) {
-            if (Array.isArray(raw)) return raw;
-            if (raw && Array.isArray(raw.items)) return raw.items;
-            if (raw && Array.isArray(raw.stations)) return raw.stations;
-            if (raw && Array.isArray(raw.tracks)) return raw.tracks;
-            return [];
-        }
-
-        function parseM3U(text) {
-            const lines = text.split(/\r?\n/);
-            const entries = [];
-            let pendingTitle = '';
-            for (const line of lines) {
-                if (line.startsWith('#EXTINF')) {
-                    pendingTitle = line.split(',')[1] || 'Radio stream';
-                    continue;
-                }
-                if (line && !line.startsWith('#')) {
-                    entries.push({ title: pendingTitle || 'Radio stream', url: line.trim() });
-                    pendingTitle = '';
-                }
-            }
-            return entries;
-        }
-
-        function humanizeFileName(fileName) {
-            return decodeURIComponent(fileName)
-                .replace(/\.[^.]+$/, '')
-                .replace(/[_-]+/g, ' ')
-                .trim();
-        }
-
-        function ensureDirectoryBaseUrl(basePath) {
-            try {
-                const url = new URL(basePath, window.location.href);
-                if (!url.pathname.endsWith('/')) {
-                    url.pathname += '/';
-                }
-                return url.toString();
-            } catch (error) {
-                return basePath.endsWith('/') ? basePath : `${basePath}/`;
-            }
-        }
-
-        function isLikelyAudioUrl(url) {
-            // Support direct files and common radio stream/playlist formats.
-            return /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac|m3u|m3u8|pls)(\?|#|$)/i.test(url || '');
-        }
-
-        function canPlayDirectUrl(url, mediaType = '') {
-            if (!url || typeof url !== 'string') return false;
-            if (isLikelyAudioUrl(url)) return true;
-
-            // Some live radio endpoints expose audio at extensionless URLs, e.g. /rock-192.
-            if (mediaType === 'Radio' && /^https?:\/\//i.test(url)) {
-                return !/\.(html?|php|asp|aspx|jsp)(\?|#|$)/i.test(url);
-            }
-
-            return false;
-        }
-
-        function normalizeLibraryItems(items, fallbackLabel = 'Media') {
-            if (!Array.isArray(items)) return [];
-            return items
-                .map((item, index) => {
-                    if (!item || typeof item !== 'object') return null;
-                    const rawUrl = item.url || item.src || item.path || item.href || item.file;
-                    if (typeof rawUrl !== 'string' || !rawUrl.trim()) return null;
-                    const fallbackTitle = `Item ${index + 1}`;
-                    return {
-                        ...item,
-                        title: item.title || item.name || item.label || fallbackTitle,
-                        subtitle: item.subtitle || item.type || fallbackLabel,
-                        url: rawUrl.trim()
-                    };
-                })
-                .filter(Boolean);
-        }
-
-        function resolveConfiguredPath(inputPath) {
-            const trimmed = (inputPath || '').trim();
-            if (!trimmed) return [];
-            if (/^https?:\/\//i.test(trimmed)) return [trimmed];
-            if (trimmed.startsWith('/')) return [trimmed];
-            return [`/${trimmed}`];
-        }
-
-        function getPathVariants(inputPath) {
-            const resolvedPaths = resolveConfiguredPath(inputPath);
-            if (resolvedPaths.length === 0) return [];
-            const trimmed = resolvedPaths[0];
-            if (/^https?:\/\//i.test(trimmed)) return [trimmed];
-            const hasTrailingSlash = trimmed.endsWith('/');
-            const rawSegments = trimmed.split('/').filter(Boolean);
-            if (rawSegments.length === 0) return [trimmed];
-
-            const last = rawSegments[rawSegments.length - 1];
-            const variants = new Set([trimmed]);
-            const alternates = [
-                last.toLowerCase(),
-                last.toUpperCase(),
-                last[0].toUpperCase() + last.slice(1).toLowerCase()
-            ];
-
-            // Common audiobook casing seen in host media folders.
-            if (last.toLowerCase() === 'audiobooks') {
-                alternates.push('AudioBooks');
-            }
-
-            alternates.forEach((candidateLast) => {
-                const candidateSegments = [...rawSegments.slice(0, -1), candidateLast];
-                const candidate = `/${candidateSegments.join('/')}${hasTrailingSlash ? '/' : ''}`;
-                variants.add(candidate);
-            });
-
-            if (!hasTrailingSlash) {
-                variants.add(`${trimmed}/`);
-            }
-
-            return Array.from(variants);
-        }
-
-        function parseDirectoryListing(rawHtml, basePath, mediaTypeLabel) {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(rawHtml, 'text/html');
-            const links = Array.from(doc.querySelectorAll('a[href]'));
-            const mediaPattern = /\.(mp3|m4a|m4b|aac|ogg|opus|wav|flac)$/i;
-            const resolvedBasePath = ensureDirectoryBaseUrl(basePath);
-            const files = [];
-            const directories = [];
-
-            links.forEach((link) => {
-                const href = link.getAttribute('href');
-                if (!href || href.startsWith('?') || href.startsWith('#') || href.startsWith('../')) return;
-
-                const absolute = new URL(href, resolvedBasePath);
-                const pathname = absolute.pathname || '';
-                const basePathname = new URL(resolvedBasePath).pathname;
-                const fileName = pathname.split('/').filter(Boolean).pop() || '';
-                const looksLikeDirectory = href.endsWith('/') || (!fileName.includes('.') && !mediaPattern.test(pathname));
-
-                if (looksLikeDirectory) {
-                    if (pathname !== basePathname) {
-                        directories.push({
-                            title: humanizeFileName(fileName || 'Folder'),
-                            subtitle: 'Folder',
-                            url: absolute.toString()
-                        });
-                    }
-                    return;
-                }
-
-                if (!mediaPattern.test(pathname)) return;
-                if (!fileName) return;
-
-                files.push({
-                    title: humanizeFileName(fileName),
-                    subtitle: mediaTypeLabel,
-                    url: absolute.toString()
-                });
-            });
-
-            return { files, directories };
-        }
-
-        async function discoverDirectoryMedia(startPath, mediaTypeLabel, maxDepth = 2) {
-            const queue = [{ path: startPath, depth: 0 }];
-            const visited = new Set();
-            const discovered = [];
-            const MAX_ITEMS = 200;
-
-            while (queue.length > 0 && discovered.length < MAX_ITEMS) {
-                const current = queue.shift();
-                if (!current || visited.has(current.path)) continue;
-                visited.add(current.path);
-
+            const saved = localStorage.getItem('launchpad_config');
+            if (saved) {
                 try {
-                    const response = await fetch(current.path);
-                    if (!response.ok) continue;
-                    const contentType = response.headers.get('content-type') || '';
-                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) continue;
-
-                    const html = await response.text();
-                    const { files, directories } = parseDirectoryListing(html, response.url, mediaTypeLabel);
-                    discovered.push(...files);
-
-                    if (current.depth < maxDepth) {
-                        directories.forEach((directory) => {
-                            if (!visited.has(directory.url)) {
-                                queue.push({ path: directory.url, depth: current.depth + 1 });
-                            }
-                        });
+                    state.config = JSON.parse(saved);
+                    // Ensure structure integrity in case of older versions
+                    if(!state.config.primary || state.config.primary.length !== 8) {
+                        state.config.primary = DEFAULT_CONFIG.primary;
                     }
-                } catch (error) {
-                    addLog('warn', `Could not scan directory`, `${current.path} :: ${error && error.message ? error.message : error}`);
-                    console.warn(`Could not scan directory "${current.path}"`, error);
+                    if(!state.config.secondary || state.config.secondary.length !== 16) {
+                        state.config.secondary = DEFAULT_CONFIG.secondary;
+                    }
+                } catch (e) {
+                    state.config = JSON.parse(JSON.stringify(INITIAL_DEFAULTS));
                 }
+            } else {
+                state.config = JSON.parse(JSON.stringify(INITIAL_DEFAULTS));
+                saveConfig();
             }
-
-            return discovered.slice(0, MAX_ITEMS);
-        }
-
-        async function fetchLibrary(path, fallbackData, options = {}) {
-            const { allowM3U = false, scanDirectory = false, mediaTypeLabel = 'Media' } = options;
-            const pathCandidates = scanDirectory ? getPathVariants(path) : resolveConfiguredPath(path);
-            try {
-                for (const candidatePath of pathCandidates) {
-                    const response = await fetch(candidatePath);
-                    if (!response.ok) continue;
-                    const contentType = response.headers.get('content-type') || '';
-                    const body = await response.text();
-                    const looksLikeM3U = contentType.includes('mpegurl')
-                        || contentType.includes('m3u')
-                        || body.trim().startsWith('#EXTM3U')
-                        || candidatePath.toLowerCase().endsWith('.m3u');
-                    if (allowM3U && looksLikeM3U) {
-                        const parsed = parseM3U(body);
-                        if (parsed.length > 0) return parsed;
-                    }
-                    try {
-                        const data = JSON.parse(body);
-                        const normalized = normalizeLibraryData(data);
-                        if (normalized.length) return normalized;
-                    } catch (parseError) {
-                        if (scanDirectory) {
-                            let discoveredItems = [];
-                            if (contentType.includes('text/html')) {
-                                const listing = parseDirectoryListing(body, response.url, mediaTypeLabel);
-                                discoveredItems = listing.files;
-                            }
-                            if (discoveredItems.length === 0) {
-                                discoveredItems = await discoverDirectoryMedia(candidatePath, mediaTypeLabel);
-                            }
-                            if (discoveredItems.length > 0) return discoveredItems;
-                        }
-                    }
-                }
-                return fallbackData;
-            } catch (error) {
-                addLog('warn', `Using fallback media`, `${path} :: ${error && error.message ? error.message : error}`);
-                console.warn(`Using fallback media for "${path}"`, error);
-                return fallbackData;
-            }
-        }
-
-        function renderRadio(stations) {
-            const radioGrid = document.getElementById('radioGrid');
-            radioGrid.innerHTML = '';
-            if (!Array.isArray(stations) || stations.length === 0) {
-                radioGrid.innerHTML = `
-                    <div class="col-span-2 bg-slate-800 rounded-3xl p-8 border border-slate-700 text-center">
-                        <h3 class="text-3xl font-bold text-amber-300 mb-3">No radio stations found</h3>
-                        <p class="text-xl text-slate-300">Check the Radio source path in configuration.</p>
-                    </div>
-                `;
-                return;
-            }
-            stations.forEach((station, index) => {
-                const initials = station.title.split(' ').map(word => word[0]).join('').slice(0, 3);
-                const colorClasses = ['bg-blue-600', 'bg-emerald-600', 'bg-purple-600', 'bg-red-600'];
-                const card = document.createElement('button');
-                const mediaKey = makeMediaKey(station, 'Radio');
-                card.className = 'tap-target bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 border-4 border-transparent focus:border-amber-400 active:border-amber-400';
-                card.dataset.mediaKey = mediaKey;
-                card.innerHTML = `
-                    <div class="w-24 h-24 rounded-full ${colorClasses[index % colorClasses.length]} flex items-center justify-center text-3xl font-bold">${initials}</div>
-                    <span class="text-3xl font-semibold text-center mt-2">${station.title}</span>
-                `;
-                card.addEventListener('click', () => {
-                    if (currentMediaKey === mediaKey) {
-                        togglePlay();
-                        return;
-                    }
-                    playMedia(station, 'Radio', mediaKey);
-                });
-                radioGrid.appendChild(card);
-            });
-            updateMediaSelectionUI();
-            lucide.createIcons();
-        }
-
-        function renderBookList(books) {
-            const booksList = document.getElementById('booksList');
-            booksList.innerHTML = '';
-            if (!Array.isArray(books) || books.length === 0) {
-                booksList.innerHTML = `
-                    <div class="bg-slate-800 rounded-3xl p-8 border border-slate-700 text-center">
-                        <h3 class="text-3xl font-bold text-amber-300 mb-3">No audiobooks found</h3>
-                        <p class="text-xl text-slate-300">No supported audio files were discovered at the configured Books path.</p>
-                    </div>
-                `;
-                return;
-            }
-            books.forEach((book, index) => {
-                const colors = ['bg-amber-700', 'bg-blue-900', 'bg-violet-800', 'bg-teal-800'];
-                const card = document.createElement('button');
-                const mediaKey = makeMediaKey(book, 'Audiobook');
-                card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex items-center gap-6 text-left w-full border-4 border-transparent';
-                card.dataset.mediaKey = mediaKey;
-                card.innerHTML = `
-                    <div class="w-28 h-36 ${colors[index % colors.length]} rounded-xl flex-shrink-0 shadow-lg"></div>
-                    <div class="flex flex-col justify-center">
-                        <span class="text-4xl font-bold mb-2 leading-tight">${book.title}</span>
-                        <span class="text-2xl text-slate-400">${book.subtitle || 'Audiobook'}</span>
-                    </div>
-                `;
-                card.addEventListener('click', () => {
-                    if (currentMediaKey === mediaKey) {
-                        togglePlay();
-                        return;
-                    }
-                    playMedia(book, 'Audiobook', mediaKey);
-                });
-                booksList.appendChild(card);
-            });
-            updateMediaSelectionUI();
-        }
-
-        function renderMusicGrid(albums, options = {}) {
-            const { showBack = false, currentFolderLabel = '' } = options;
-            const musicGrid = document.getElementById('musicGrid');
-            musicGrid.innerHTML = '';
-            const trackItems = albums.filter(item => item.kind !== 'directory');
-            const trackIndexByUrl = new Map(trackItems.map((track, idx) => [track.url, idx]));
-
-            if (showBack) {
-                const backCard = document.createElement('button');
-                backCard.className = 'tap-target bg-slate-900 border-2 border-slate-600 rounded-3xl p-6 flex flex-col items-center gap-3 text-center';
-                backCard.innerHTML = `
-                    <i data-lucide="arrow-left-circle" class="w-14 h-14 text-amber-400"></i>
-                    <span class="text-2xl font-bold">Back</span>
-                    <span class="text-lg text-slate-400 truncate w-full">${currentFolderLabel}</span>
-                `;
-                backCard.addEventListener('click', () => openMusicFolder(musicBrowseState.history.pop() || musicBrowseState.rootPath, false));
-                musicGrid.appendChild(backCard);
-            }
-
-            if (!Array.isArray(albums) || albums.length === 0) {
-                const emptyCard = document.createElement('div');
-                emptyCard.className = 'col-span-2 bg-slate-800 rounded-3xl p-8 border border-slate-700 text-center';
-                emptyCard.innerHTML = `
-                    <h3 class="text-3xl font-bold text-amber-300 mb-3">No music found</h3>
-                    <p class="text-xl text-slate-300">No supported audio files or folders were discovered at the configured Music path.</p>
-                `;
-                musicGrid.appendChild(emptyCard);
-                return;
-            }
-
-            albums.forEach((album, index) => {
-                const card = document.createElement('button');
-                card.className = 'tap-target bg-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center border-4 border-transparent';
-                if (album.kind === 'directory') {
-                    card.innerHTML = `
-                        <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center">
-                            <i data-lucide="folder-open" class="w-20 h-20 text-amber-300"></i>
-                        </div>
-                        <span class="text-3xl font-bold mt-2">${album.title}</span>
-                        <span class="text-xl text-slate-400">${album.subtitle || 'Album Folder'}</span>
-                    `;
-                    card.addEventListener('click', () => openMusicFolder(album.url, true));
-                } else {
-                    const mediaKey = makeMediaKey(album, 'Album');
-                    card.dataset.mediaKey = mediaKey;
-                    card.innerHTML = `
-                        <div class="w-40 h-40 bg-slate-700 rounded-xl shadow-lg flex items-center justify-center text-5xl font-black text-amber-300">${index + 1}</div>
-                        <span class="text-3xl font-bold mt-2">${album.title}</span>
-                        <span class="text-xl text-slate-400">${album.subtitle || 'Album'}</span>
-                    `;
-                    card.addEventListener('click', () => {
-                        if (currentMediaKey === mediaKey) {
-                            togglePlay();
-                            return;
-                        }
-                        const startTrackIndex = trackIndexByUrl.get(album.url);
-                        if (startTrackIndex !== undefined) {
-                            setAlbumPlaybackQueue(trackItems, album.url);
-                        } else {
-                            setAlbumPlaybackQueue([], '');
-                        }
-                        playMedia(album, 'Album', mediaKey);
-                    });
-                }
-                musicGrid.appendChild(card);
-            });
-            updateMediaSelectionUI();
-            lucide.createIcons();
-        }
-
-        async function openMusicFolder(path, pushHistory = false) {
-            const candidatePaths = getPathVariants(path);
-            for (const candidatePath of candidatePaths) {
-                try {
-                    const response = await fetch(candidatePath);
-                    if (!response.ok) continue;
-                    const contentType = response.headers.get('content-type') || '';
-                    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) continue;
-                    const html = await response.text();
-                    const listing = parseDirectoryListing(html, response.url, 'Track');
-                    const albums = [
-                        ...listing.directories.map(folder => ({ ...folder, kind: 'directory', subtitle: 'Album folder' })),
-                        ...listing.files.map(file => ({ ...file, kind: 'track', subtitle: file.subtitle || 'Track' }))
-                    ];
-                    if (pushHistory && musicBrowseState.currentPath) {
-                        musicBrowseState.history.push(musicBrowseState.currentPath);
-                    }
-                    musicBrowseState.currentPath = response.url;
-                    const folderName = decodeURIComponent(new URL(response.url).pathname).split('/').filter(Boolean).pop() || 'Music';
-                    renderMusicGrid(albums, {
-                        showBack: musicBrowseState.history.length > 0,
-                        currentFolderLabel: humanizeFileName(folderName)
-                    });
-                    return true;
-                } catch (error) {
-                    addLog('warn', `Could not open music folder`, `${candidatePath} :: ${error && error.message ? error.message : error}`);
-                    console.warn(`Could not open music folder "${candidatePath}"`, error);
-                }
-            }
-            addLog('warn', 'Music folder could not be opened', path);
-            return false;
-        }
-
-        async function loadLibraries() {
-            const radioRaw = await fetchLibrary(appConfig.radioPath, defaultLibrary.radio, { allowM3U: true });
-            const booksRaw = await fetchLibrary(appConfig.booksPath, defaultLibrary.books, { scanDirectory: true, mediaTypeLabel: 'Audiobook' });
-            const remoteRadio = normalizeLibraryItems(radioRaw, 'Radio');
-            const localRadio = normalizeLibraryItems(customRadioStations, 'Radio');
-            const radioSeen = new Set();
-            const radio = [...localRadio, ...remoteRadio].filter((station) => {
-                const key = (station.url || '').toLowerCase();
-                if (!key || radioSeen.has(key)) return false;
-                radioSeen.add(key);
-                return true;
-            });
-            const books = normalizeLibraryItems(booksRaw, 'Audiobook');
-            renderRadio(radio);
-            renderBookList(books);
-            musicBrowseState = { rootPath: appConfig.musicPath, currentPath: '', history: [] };
-            const loadedFolder = await openMusicFolder(appConfig.musicPath);
-            if (!loadedFolder) {
-                renderMusicGrid([]);
-            }
-        }
-
-        function openConfig() {
-            configScreen.classList.remove('hidden');
-            configScreen.classList.add('flex');
-            refreshLogViewer();
-            renderCustomStationsEditor();
-            lucide.createIcons(); // ensure overlay icons render
-        }
-
-        function closeConfig() {
-            configScreen.classList.add('hidden');
-            configScreen.classList.remove('flex');
         }
 
         function saveConfig() {
-            const rPath = document.getElementById('radioPath').value.trim();
-            const bPath = document.getElementById('booksPath').value.trim();
-            const mPath = document.getElementById('musicPath').value.trim();
-            appConfig = { radioPath: rPath, booksPath: bPath, musicPath: mPath };
-            localStorage.setItem('simpleMediaConfig', JSON.stringify(appConfig));
-            loadLibraries();
-            showToast("Configuration Saved", 'check-circle');
-            closeConfig();
+            localStorage.setItem('launchpad_config', JSON.stringify(state.config));
         }
 
-        loadConfig();
-        loadLogs();
-        loadCustomRadioStations();
-        addLog('info', 'App initialized');
-        loadLibraries();
+        // Helper to check if a URL represents a local file or path
+        function isLocalPath(url) {
+            if (!url) return false;
+            // Matches file:// protocol, relative pathways starting with dot or slash, or drive letters like C:\
+            return /^(file:\/\/|[\.\/]|[a-zA-Z]:)/i.test(url);
+        }
+
+        // Normalizes input to generate valid URL targets
+        function normalizeUrl(url) {
+            if (!url) return '';
+            url = url.trim();
+
+            // Already normalized protocols
+            if (/^(https?|file):\/\//i.test(url)) {
+                return url;
+            }
+            // Standard relative directories (e.g. ./app.html, /app.html)
+            if (/^(\.\/|\.\.\/|\/)/.test(url)) {
+                return url;
+            }
+            // Windows drive letters (e.g. C:\users)
+            if (/^[a-zA-Z]:[/\\]/i.test(url)) {
+                let formatted = url.replace(/\\/g, '/');
+                return 'file:///' + formatted;
+            }
+            // Treat everything else as standard domain names and default to HTTPS
+            return 'https://' + url;
+        }
+
+        // Rendering Visuals
+        function applyBackground() {
+            if (state.config.backgroundImage) {
+                document.body.style.backgroundImage = `url(${state.config.backgroundImage})`;
+                document.body.classList.add('has-bg');
+                bgClearBtn.classList.remove('hidden');
+            } else {
+                document.body.style.backgroundImage = 'none';
+                document.body.classList.remove('has-bg');
+                bgClearBtn.classList.add('hidden');
+            }
+        }
+
+        function getFaviconUrl(url) {
+            if (!url || isLocalPath(url)) return '';
+            try {
+                const domain = new URL(url).hostname;
+                return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function getInitials(title) {
+            return title ? title.substring(0, 2).toUpperCase() : '+';
+        }
+
+        function createButtonHTML(item, type, index) {
+            const isPrimary = type === 'primary';
+            const hasData = item.url && item.url.trim() !== "";
+            const iconUrl = getFaviconUrl(item.url);
+            
+            // Layout differences based on primary (large) vs secondary (small)
+            const heightClass = isPrimary ? "h-32 sm:h-36" : "h-20 sm:h-24";
+            const iconSize = isPrimary ? "w-14 h-14" : "w-8 h-8";
+            const textSize = isPrimary ? "text-base" : "text-xs";
+            const gap = isPrimary ? "gap-4" : "gap-2";
+
+            let iconHtml = '';
+            if (hasData) {
+                const local = isLocalPath(item.url);
+                
+                if (item.icon) {
+                    // Custom uploaded icon
+                    iconHtml = `
+                        <div class="${iconSize} rounded-xl bg-slate-700/50 flex items-center justify-center overflow-hidden shadow-inner p-1 pointer-events-none">
+                            <img src="${item.icon}" alt="${item.title}" class="w-full h-full object-contain drop-shadow-md rounded-lg" />
+                        </div>`;
+                } else if (local) {
+                    // Local file icon fallback (sleek file/document vector)
+                    iconHtml = `
+                        <div class="${iconSize} rounded-xl bg-slate-700/50 flex items-center justify-center overflow-hidden shadow-inner p-1.5 pointer-events-none text-blue-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3/4 h-3/4">
+                                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                                <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                                <path d="M10 9H8"/>
+                                <path d="M16 13H8"/>
+                                <path d="M16 17H8"/>
+                            </svg>
+                        </div>`;
+                } else {
+                    // standard web page icon
+                    iconHtml = `
+                        <div class="${iconSize} rounded-xl bg-slate-700/50 flex items-center justify-center overflow-hidden shadow-inner p-1 pointer-events-none">
+                            <img src="${iconUrl}" alt="${item.title}" class="w-full h-full object-contain drop-shadow-md rounded-lg" 
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div class="w-full h-full flex items-center justify-center font-bold text-slate-300 hidden text-xl bg-slate-700">
+                                ${getInitials(item.title)}
+                            </div>
+                        </div>`;
+                }
+            } else {
+                iconHtml = `
+                    <div class="${iconSize} rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center text-slate-600 transition-colors group-hover:border-slate-500 group-hover:text-slate-400 pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="${isPrimary ? '24' : '16'}" height="${isPrimary ? '24' : '16'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </div>`;
+            }
+
+            return `
+                <div class="bookmark-btn group relative w-full ${heightClass} bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 rounded-2xl flex flex-col items-center justify-center ${gap} p-4 shadow-sm backdrop-blur-sm"
+                     data-type="${type}" data-index="${index}" ${state.isEditMode ? 'draggable="true"' : ''}>
+                    ${iconHtml}
+                    <span class="${textSize} font-medium text-slate-300 truncate w-full text-center group-hover:text-white transition-colors pointer-events-none drop-shadow-md">
+                        ${hasData ? item.title : (state.isEditMode ? 'Empty slot' : '')}
+                    </span>
+                    ${state.isEditMode ? `
+                        <div class="absolute top-2 right-2 p-1.5 bg-blue-500/90 rounded-md text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderGrid() {
+            primaryGrid.innerHTML = state.config.primary.map((item, i) => createButtonHTML(item, 'primary', i)).join('');
+            secondaryGrid.innerHTML = state.config.secondary.map((item, i) => createButtonHTML(item, 'secondary', i)).join('');
+            
+            // Re-attach event listeners to new elements
+            document.querySelectorAll('.bookmark-btn').forEach(btn => {
+                btn.addEventListener('click', handleBookmarkClick);
+            });
+        }
+
+        function toggleEditMode() {
+            state.isEditMode = !state.isEditMode;
+            
+            if (state.isEditMode) {
+                mainContainer.classList.add('edit-mode-active');
+                editBanner.classList.remove('hidden');
+                editText.textContent = 'Done Editing';
+                toggleEditBtn.classList.replace('bg-slate-800', 'bg-blue-600/20');
+                toggleEditBtn.classList.replace('text-slate-300', 'text-blue-400');
+                toggleEditBtn.classList.replace('border-slate-700', 'border-blue-500/50');
+            } else {
+                mainContainer.classList.remove('edit-mode-active');
+                editBanner.classList.add('hidden');
+                editText.textContent = 'Edit Mode';
+                toggleEditBtn.classList.replace('bg-blue-600/20', 'bg-slate-800');
+                toggleEditBtn.classList.replace('text-blue-400', 'text-slate-300');
+                toggleEditBtn.classList.replace('border-blue-500/50', 'border-slate-700');
+            }
+            
+            renderGrid(); // Re-render to show/hide edit icons and borders
+        }
+
+        // Drag and Drop Logic
+        function handleDragStart(e) {
+            if (!state.isEditMode) return;
+            const btn = e.target.closest('.bookmark-btn');
+            if (!btn) return;
+
+            dragSource = {
+                type: btn.dataset.type,
+                index: parseInt(btn.dataset.index)
+            };
+            
+            e.dataTransfer.effectAllowed = 'move';
+            // Slight delay allows the drag ghost image to be full opacity
+            setTimeout(() => btn.classList.add('opacity-40'), 0);
+        }
+
+        function handleDragOver(e) {
+            if (!state.isEditMode) return;
+            e.preventDefault(); // Necessary to allow dropping
+            
+            const btn = e.target.closest('.bookmark-btn');
+            if (btn && dragSource && (dragSource.type !== btn.dataset.type || dragSource.index !== parseInt(btn.dataset.index))) {
+                btn.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            if (!state.isEditMode) return;
+            const btn = e.target.closest('.bookmark-btn');
+            if (btn) {
+                btn.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            if (!state.isEditMode) return;
+            e.preventDefault();
+            
+            const btn = e.target.closest('.bookmark-btn');
+            if (!btn || !dragSource) return;
+
+            btn.classList.remove('drag-over');
+
+            const targetType = btn.dataset.type;
+            const targetIndex = parseInt(btn.dataset.index);
+
+            // Swap the items in the configuration
+            if (dragSource.type !== null && dragSource.index !== null &&
+               (dragSource.type !== targetType || dragSource.index !== targetIndex)) {
+                
+                const temp = state.config[targetType][targetIndex];
+                state.config[targetType][targetIndex] = state.config[dragSource.type][dragSource.index];
+                state.config[dragSource.type][dragSource.index] = temp;
+
+                saveConfig();
+                renderGrid();
+            }
+        }
+
+        function handleDragEnd(e) {
+            if (!state.isEditMode) return;
+            const btn = e.target.closest('.bookmark-btn');
+            if (btn) btn.classList.remove('opacity-40');
+            dragSource = null;
+            
+            document.querySelectorAll('.bookmark-btn').forEach(b => {
+                b.classList.remove('drag-over');
+            });
+        }
+
+        // Interaction Handlers
+        function handleBookmarkClick(e) {
+            const btn = e.currentTarget;
+            const type = btn.dataset.type;
+            const index = parseInt(btn.dataset.index);
+            const item = state.config[type][index];
+
+            if (state.isEditMode) {
+                openEditModal(type, index, item);
+            } else {
+                if (item.url) {
+                    let finalUrl = item.url;
+                    // Safely ensure relative or file URLs launch without being forced to external HTTPS
+                    if (!/^(https?|file):\/\//i.test(finalUrl) && !/^(\.\/|\.\.\/|\/)/.test(finalUrl)) {
+                        finalUrl = 'https://' + finalUrl;
+                    }
+                    window.open(finalUrl, '_blank');
+                } else {
+                    // If clicking empty slot in normal mode, prompt to edit
+                    openEditModal(type, index, item);
+                }
+            }
+        }
+
+        // Modal Logic
+        function openEditModal(type, index, item) {
+            document.getElementById('editType').value = type;
+            document.getElementById('editIndex').value = index;
+            document.getElementById('siteName').value = item.title || '';
+            document.getElementById('siteUrl').value = item.url || '';
+            
+            tempIconBase64 = item.icon || null;
+            updateIconPreview();
+            
+            if (item.url) {
+                clearBtn.style.display = 'block';
+            } else {
+                clearBtn.style.display = 'none';
+            }
+
+            editModal.showModal();
+            document.getElementById('siteName').focus();
+        }
+
+        function closeEditModal() {
+            editModal.close();
+            editForm.reset();
+            tempIconBase64 = null;
+            updateIconPreview();
+        }
+
+        function updateIconPreview() {
+            if (!iconPreview) return;
+            const url = document.getElementById('siteUrl').value.trim();
+            
+            let src = tempIconBase64;
+            if (!src) {
+                if (isLocalPath(url)) {
+                    // Preview a standard file SVG if it is local
+                    iconPreview.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-2/3 h-2/3 text-blue-400">
+                            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                            <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                        </svg>`;
+                    return;
+                }
+                src = getFaviconUrl(url);
+            }
+
+            if (src) {
+                iconPreview.innerHTML = `<img src="${src}" class="w-full h-full object-contain drop-shadow-sm rounded" />`;
+            } else {
+                iconPreview.innerHTML = `<span class="text-xs text-slate-500">None</span>`;
+            }
+        }
+
+        function handleSaveBookmark(e) {
+            e.preventDefault();
+            const type = document.getElementById('editType').value;
+            const index = parseInt(document.getElementById('editIndex').value);
+            const title = document.getElementById('siteName').value.trim();
+            let url = document.getElementById('siteUrl').value.trim();
+
+            url = normalizeUrl(url);
+
+            state.config[type][index] = { title, url, icon: tempIconBase64 };
+            
+            saveConfig();
+            renderGrid();
+            closeEditModal();
+            showToast('Bookmark saved successfully');
+        }
+
+        function handleClearBookmark() {
+            const type = document.getElementById('editType').value;
+            const index = parseInt(document.getElementById('editIndex').value);
+            
+            state.config[type][index] = { title: "", url: "", icon: null };
+            
+            saveConfig();
+            renderGrid();
+            closeEditModal();
+            showToast('Bookmark cleared');
+        }
+
+        // Import/Export Logic
+        function exportConfig() {
+            const dataStr = JSON.stringify(state.config, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `launchpad_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast('Configuration exported');
+        }
+
+        function importConfig(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const importedConfig = JSON.parse(event.target.result);
+                    
+                    // Basic validation
+                    if (importedConfig.primary && Array.isArray(importedConfig.primary) && importedConfig.primary.length === 8 &&
+                        importedConfig.secondary && Array.isArray(importedConfig.secondary) && importedConfig.secondary.length === 16) {
+                        
+                        state.config = importedConfig;
+                        saveConfig();
+                        applyBackground();
+                        renderGrid();
+                        showToast('Configuration imported successfully');
+                    } else {
+                        throw new Error("Invalid format");
+                    }
+                } catch (err) {
+                    showToast('Error: Invalid JSON configuration file', true);
+                }
+                
+                // Reset file input
+                importFile.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        // UI Helpers
+        function showToast(message, isError = false) {
+            toastMsg.textContent = message;
+            const iconPath = isError 
+                ? '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>' 
+                : '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>';
+            
+            document.getElementById('toastIcon').innerHTML = iconPath;
+            document.getElementById('toastIcon').className = isError ? 'text-red-400' : 'text-green-400';
+            
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function setupEventListeners() {
+            toggleEditBtn.addEventListener('click', toggleEditMode);
+            doneEditingBtn.addEventListener('click', toggleEditMode);
+            
+            closeModalBtn.addEventListener('click', closeEditModal);
+            cancelModalBtn.addEventListener('click', closeEditModal);
+            editForm.addEventListener('submit', handleSaveBookmark);
+            clearBtn.addEventListener('click', handleClearBookmark);
+            
+            // Drag and Drop Listeners attached to the main container
+            mainContainer.addEventListener('dragstart', handleDragStart);
+            mainContainer.addEventListener('dragover', handleDragOver);
+            mainContainer.addEventListener('dragleave', handleDragLeave);
+            mainContainer.addEventListener('drop', handleDrop);
+            mainContainer.addEventListener('dragend', handleDragEnd);
+            
+            // Background Selection Handlers
+            bgInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 1920; // Ensure BG fits in json cleanly
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_SIZE) {
+                                height *= MAX_SIZE / width;
+                                width = MAX_SIZE;
+                            }
+                        } else {
+                            if (height > MAX_SIZE) {
+                                width *= MAX_SIZE / height;
+                                height = MAX_SIZE;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Compression (webp at 0.7 quality saves significant storage space)
+                        state.config.backgroundImage = canvas.toDataURL('image/webp', 0.7);
+                        saveConfig();
+                        applyBackground();
+                        showToast('Background updated');
+                        bgInput.value = ''; // Reset input
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+
+            bgClearBtn.addEventListener('click', () => {
+                state.config.backgroundImage = null;
+                saveConfig();
+                applyBackground();
+                showToast('Background cleared');
+            });
+
+            // Update preview continuously if user alters URL
+            document.getElementById('siteUrl').addEventListener('input', updateIconPreview);
+
+            // Handle custom image uploads
+            siteIconInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // Create offscreen canvas to resize image
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 128; // Ensures the exported config doesn't get massive
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_SIZE) {
+                                height *= MAX_SIZE / width;
+                                width = MAX_SIZE;
+                            }
+                        } else {
+                            if (height > MAX_SIZE) {
+                                width *= MAX_SIZE / height;
+                                height = MAX_SIZE;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Save image downscaled as a WebP
+                        tempIconBase64 = canvas.toDataURL('image/webp', 0.8);
+                        updateIconPreview();
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            // Close modal on outside click
+            editModal.addEventListener('click', (e) => {
+                const dialogDimensions = editModal.getBoundingClientRect()
+                if (
+                    e.clientX < dialogDimensions.left ||
+                    e.clientX > dialogDimensions.right ||
+                    e.clientY < dialogDimensions.top ||
+                    e.clientY > dialogDimensions.bottom
+                ) {
+                    closeEditModal();
+                }
+            });
+
+            exportBtn.addEventListener('click', exportConfig);
+            importFile.addEventListener('change', importConfig);
+        }
+
+        // Boot
+        document.addEventListener('DOMContentLoaded', init);
 
     </script>
 </body>
